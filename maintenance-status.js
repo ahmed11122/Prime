@@ -9,4 +9,4 @@
 //  change takes effect immediately (no need to touch index.html
 //  or maintenance.html, and no renaming required).
 // ═══════════════════════════════════════════════════════════
-var MAINTENANCE_MODE = false;
+var MAINTENANCE_MODE = true;
