@@ -1,0 +1,1151 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>نظام إدارة إجازات الموظفين</title>
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-database-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-auth-compat.js"></script>
+<script>
+  // Same Firebase project used by index.html (سحوبات الموظفين)
+  const firebaseConfig = {
+    apiKey: "AIzaSyA1q9LiS6EXNCBFmFvytyN-p4KKgP9wym4",
+    authDomain: "prime-e-8eb80.firebaseapp.com",
+    databaseURL: "https://prime-e-8eb80-default-rtdb.firebaseio.com",
+    projectId: "prime-e-8eb80",
+    storageBucket: "prime-e-8eb80.firebasestorage.app",
+    messagingSenderId: "671376930301",
+    appId: "1:671376930301:web:f8b61666314f3149fb5594"
+  };
+  firebase.initializeApp(firebaseConfig);
+  const fbDB = firebase.database();
+  const fbAuth = firebase.auth();
+  // Path where the leave cards (EMPLOYEES array) are stored in Realtime Database
+  const LEAVE_DB_PATH = 'leaveCardsSystem/employees';
+</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Amiri:wght@400;700&family=Tajawal:wght@300;400;500;700;900&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --ink:#1c2b3a;
+    --navy:#16283d;
+    --navy-2:#1f3b58;
+    --paper:#f6f1e6;
+    --paper-2:#efe7d4;
+    --brass:#a9793a;
+    --brass-2:#c99a52;
+    --line:#d8cba9;
+    --ok:#3c6e47;
+    --warn:#9c3b2e;
+    --shadow: 0 10px 30px rgba(22,40,61,.15);
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background: var(--navy);
+    background-image:
+      radial-gradient(circle at 15% 10%, rgba(201,154,82,.08), transparent 40%),
+      radial-gradient(circle at 85% 90%, rgba(201,154,82,.06), transparent 45%);
+    font-family:'Tajawal',sans-serif;
+    color:var(--ink);
+    min-height:100vh;
+  }
+  .app{
+    display:grid;
+    grid-template-columns: 320px 1fr;
+    min-height:100vh;
+  }
+
+  /* ---------- Sidebar ---------- */
+  .sidebar{
+    background: linear-gradient(180deg,var(--navy) 0%, var(--navy-2) 100%);
+    color:#e9e2cf;
+    padding:26px 20px 20px;
+    display:flex;
+    flex-direction:column;
+    gap:18px;
+    border-left:1px solid rgba(201,154,82,.25);
+  }
+  .brand{
+    display:flex;
+    align-items:center;
+    gap:12px;
+    padding-bottom:16px;
+    border-bottom:1px solid rgba(201,154,82,.25);
+  }
+  .brand .seal{
+    width:46px;height:46px;border-radius:50%;
+    border:2px solid var(--brass-2);
+    display:flex;align-items:center;justify-content:center;
+    font-family:'Amiri',serif;font-weight:700;font-size:20px;
+    color:var(--brass-2);
+    flex:none;
+  }
+  .brand h1{
+    font-family:'Amiri',serif;
+    font-size:19px;
+    margin:0;
+    line-height:1.35;
+    font-weight:700;
+    color:#f3ecd8;
+  }
+  .brand p{margin:2px 0 0;font-size:11.5px;color:#b9ac86;letter-spacing:.3px;}
+
+  .stats{
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:10px;
+  }
+  .stat{
+    background:rgba(255,255,255,.04);
+    border:1px solid rgba(201,154,82,.2);
+    border-radius:8px;
+    padding:10px 12px;
+    text-align:center;
+  }
+  .stat b{display:block;font-size:22px;color:var(--brass-2);font-family:'Amiri',serif;}
+  .stat span{font-size:10.5px;color:#b9ac86;}
+
+  .search{
+    position:relative;
+  }
+  .search input{
+    width:100%;
+    padding:10px 14px;
+    border-radius:8px;
+    border:1px solid rgba(201,154,82,.35);
+    background:rgba(255,255,255,.06);
+    color:#f3ecd8;
+    font-family:'Tajawal',sans-serif;
+    font-size:13.5px;
+    outline:none;
+  }
+  .search input::placeholder{color:#9a8f6e;}
+  .search input:focus{border-color:var(--brass-2);background:rgba(255,255,255,.09);}
+
+  .emp-list{
+    list-style:none;
+    margin:0;padding:0;
+    overflow-y:auto;
+    flex:1;
+    display:flex;flex-direction:column;gap:6px;
+  }
+  .emp-item{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:8px;
+    padding:10px 12px;
+    border-radius:8px;
+    cursor:pointer;
+    border:1px solid transparent;
+    transition:background .15s, border-color .15s;
+  }
+  .emp-item:hover{background:rgba(255,255,255,.05);}
+  .emp-item.active{
+    background:rgba(201,154,82,.14);
+    border-color:rgba(201,154,82,.4);
+  }
+  .emp-item .nm{font-size:13.5px;color:#f0e9d4;font-weight:500;}
+  .emp-item .cnt{
+    font-size:10.5px;
+    background:rgba(201,154,82,.2);
+    color:var(--brass-2);
+    border-radius:20px;
+    padding:2px 8px;
+    flex:none;
+  }
+  .sidebar-foot{
+    font-size:10.5px;color:#8a7f60;text-align:center;padding-top:10px;
+    border-top:1px solid rgba(201,154,82,.18);
+  }
+
+  /* ---------- Main ---------- */
+  .main{
+    background: var(--paper);
+    padding: 34px 44px 60px;
+    overflow-y:auto;
+  }
+  .toolbar{
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    margin-bottom:22px;
+    gap:12px;
+    flex-wrap:wrap;
+  }
+  .toolbar h2{
+    font-family:'Amiri',serif;
+    font-size:15px;
+    color:var(--brass);
+    margin:0;
+    letter-spacing:.5px;
+  }
+  .btn{
+    font-family:'Tajawal',sans-serif;
+    font-weight:700;
+    font-size:13px;
+    padding:9px 18px;
+    border-radius:7px;
+    border:1px solid var(--brass);
+    background:transparent;
+    color:var(--brass);
+    cursor:pointer;
+    transition:.15s;
+  }
+  .btn:hover{background:var(--brass);color:#fff;}
+  .btn.solid{background:var(--navy);color:#f3ecd8;border-color:var(--navy);}
+  .btn.solid:hover{background:var(--navy-2);}
+  .btn.danger{border-color:var(--warn);color:var(--warn);}
+  .btn.danger:hover{background:var(--warn);color:#fff;}
+
+  .card{
+    background:#fffdf7;
+    border:1px solid var(--line);
+    border-radius:14px;
+    box-shadow:var(--shadow);
+    padding:0;
+    overflow:hidden;
+  }
+  .card-head{
+    background: linear-gradient(135deg, var(--navy) 0%, var(--navy-2) 100%);
+    color:#f3ecd8;
+    padding:24px 30px;
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    gap:20px;
+    position:relative;
+  }
+  .card-head::after{
+    content:"";
+    position:absolute; inset:0;
+    background: repeating-linear-gradient(135deg, rgba(201,154,82,.05) 0 2px, transparent 2px 14px);
+    pointer-events:none;
+  }
+  .card-head .title{
+    font-family:'Amiri',serif;
+    font-size:26px;
+    font-weight:700;
+  }
+  .card-head .sub{font-size:12.5px;color:#c9bd98;margin-top:4px;}
+  .badge-balance{
+    width:96px;height:96px;
+    border-radius:50%;
+    border:3px solid var(--brass-2);
+    display:flex;flex-direction:column;
+    align-items:center;justify-content:center;
+    background:rgba(255,255,255,.04);
+    flex:none;
+    font-family:'Amiri',serif;
+  }
+  .badge-balance b{font-size:26px;color:#f3ecd8;line-height:1;}
+  .badge-balance span{font-size:9.5px;color:#c9bd98;margin-top:4px;}
+
+  .meta-grid{
+    display:grid;
+    grid-template-columns:repeat(4,1fr);
+    gap:0;
+    border-bottom:1px dashed var(--line);
+  }
+  .meta-cell{
+    padding:16px 22px;
+    border-left:1px dashed var(--line);
+  }
+  .meta-cell:last-child{border-left:none;}
+  .meta-cell label{
+    display:block;font-size:10.5px;color:var(--brass);
+    text-transform:uppercase;letter-spacing:.5px;margin-bottom:5px;
+    font-weight:700;
+  }
+  .meta-cell .val{font-size:14px;color:var(--ink);font-weight:500;}
+  .meta-cell input{
+    width:100%;border:none;background:transparent;font-family:'Tajawal',sans-serif;
+    font-size:14px;color:var(--ink);font-weight:500;outline:none;
+    border-bottom:1px solid transparent;
+  }
+  .meta-cell input:focus{border-bottom:1px solid var(--brass);}
+
+  table.records{
+    width:100%;
+    border-collapse:collapse;
+    font-size:12.8px;
+  }
+  table.records thead th{
+    background:var(--paper-2);
+    color:var(--navy);
+    font-weight:700;
+    padding:10px 8px;
+    border-bottom:2px solid var(--brass);
+    text-align:center;
+    white-space:nowrap;
+  }
+  table.records tbody td{
+    padding:9px 8px;
+    text-align:center;
+    border-bottom:1px solid var(--line);
+    color:var(--ink);
+  }
+  table.records tbody tr:nth-child(even){background:#faf6ea;}
+  table.records tbody tr:hover{background:#f2e9d2;}
+  table.records tbody td.name-col{text-align:right;padding-right:14px;}
+  .row-del{
+    background:none;border:none;color:var(--warn);cursor:pointer;font-size:15px;
+  }
+  .empty-note{
+    padding:40px 20px;text-align:center;color:#9a8d68;font-size:13.5px;
+  }
+
+  .card-foot{
+    padding:18px 30px 26px;
+    display:flex;justify-content:space-between;align-items:center;
+    gap:14px; flex-wrap:wrap;
+  }
+  .officer{font-size:12.5px;color:#7c7357;}
+  .officer b{color:var(--navy);}
+
+  /* modal */
+  .overlay{
+    position:fixed;inset:0;background:rgba(22,40,61,.55);
+    display:none;align-items:center;justify-content:center;z-index:50;
+    padding:20px;
+  }
+  .overlay.show{display:flex;}
+  .modal{
+    background:#fffdf7;border-radius:12px;max-width:520px;width:100%;
+    box-shadow:0 20px 60px rgba(0,0,0,.35);
+    overflow:hidden;
+  }
+  .modal-head{
+    background:var(--navy);color:#f3ecd8;padding:16px 22px;
+    font-family:'Amiri',serif;font-size:18px;font-weight:700;
+    display:flex;justify-content:space-between;align-items:center;
+  }
+  .modal-head button{background:none;border:none;color:#c9bd98;font-size:20px;cursor:pointer;}
+  .modal-body{padding:20px 22px;display:grid;grid-template-columns:1fr 1fr;gap:14px;}
+  .modal-body .full{grid-column:1/-1;}
+  .field label{display:block;font-size:11.5px;color:var(--brass);font-weight:700;margin-bottom:5px;}
+  .field input,.field select{
+    width:100%;padding:9px 10px;border:1px solid var(--line);border-radius:6px;
+    font-family:'Tajawal',sans-serif;font-size:13px;background:#fff;color:var(--ink);
+  }
+  .modal-foot{padding:14px 22px 22px;display:flex;justify-content:flex-end;gap:10px;}
+
+  .no-employee{
+    display:flex;align-items:center;justify-content:center;height:60vh;
+    color:#8d8360;font-size:14px;text-align:center;
+  }
+
+  @media (max-width: 880px){
+    .app{grid-template-columns:1fr;}
+    .sidebar{border-left:none;border-bottom:1px solid rgba(201,154,82,.25);}
+    .meta-grid{grid-template-columns:1fr 1fr;}
+    .meta-cell:nth-child(2){border-left:none;}
+    .main{padding:22px 16px 40px;}
+  }
+
+  @media print{
+    .sidebar,.toolbar,.row-del,.overlay{display:none !important;}
+    .app{display:block;}
+    .main{background:#fff;padding:0;}
+    .card{box-shadow:none;border:1px solid #333;}
+  }
+</style>
+</head>
+<body>
+
+<div class="app">
+  <!-- ============ SIDEBAR ============ -->
+  <aside class="sidebar">
+    <div class="brand">
+      <div class="seal">م</div>
+      <div>
+        <h1>نظام إدارة إجازات الموظفين</h1>
+        <p>جميع الأقسام</p>
+      </div>
+    </div>
+
+    <div class="stats">
+      <div class="stat"><b id="statEmp">0</b><span>عدد الموظفين</span></div>
+      <div class="stat"><b id="statRec">0</b><span>إجمالي الطلبات</span></div>
+    </div>
+
+    <div class="search">
+      <select id="deptFilter" style="width:100%;padding:9px 12px;border-radius:8px;border:1px solid rgba(201,154,82,.35);background:rgba(255,255,255,.06);color:#f3ecd8;font-family:'Tajawal',sans-serif;font-size:13px;margin-bottom:10px;">
+        <option value="">كل الأقسام</option>
+      </select>
+      <input type="text" id="searchBox" placeholder="ابحث عن اسم موظف…">
+    </div>
+
+    <ul class="emp-list" id="empList"></ul>
+
+    <div class="sidebar-foot">مبني من ملف بطاقات_المتابعة.xlsx</div>
+  </aside>
+
+  <!-- ============ MAIN ============ -->
+  <main class="main">
+    <div class="toolbar">
+      <h2 id="toolbarTitle">بطاقة متابعة الإجازات</h2>
+      <div style="display:flex; gap:10px; flex-wrap:wrap;">
+        <button class="btn" id="exportBtn">⬇ تصدير البيانات</button>
+        <button class="btn" id="importBtn">⬆ استيراد البيانات</button>
+        <input type="file" id="importFile" accept="application/json" style="display:none;">
+        <button class="btn" id="printBtn">طباعة البطاقة</button>
+        <button class="btn danger" id="deleteEmpBtn">حذف الموظف</button>
+        <button class="btn solid" id="addRecordBtn">+ إضافة طلب إجازة</button>
+        <button class="btn solid" id="addEmpBtn" style="background:var(--brass);border-color:var(--brass);">+ إضافة موظف جديد</button>
+      </div>
+    </div>
+
+    <div id="cardHolder"></div>
+  </main>
+</div>
+
+<!-- ============ MODAL: add employee ============ -->
+<div class="overlay" id="overlayEmp">
+  <div class="modal">
+    <div class="modal-head">
+      <span>إضافة موظف جديد</span>
+      <button id="closeModalEmp">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div class="field full">
+        <label>اسم الموظف *</label>
+        <input type="text" id="eName" placeholder="الاسم الكامل">
+      </div>
+      <div class="field">
+        <label>القسم / الإدارة</label>
+        <select id="eDept">
+          <option value="__new__">+ إضافة قسم جديد…</option>
+        </select>
+      </div>
+      <div class="field" id="eDeptNewWrap" style="display:none;">
+        <label>اسم القسم الجديد</label>
+        <input type="text" id="eDeptNew" placeholder="مثال: الموارد البشرية">
+      </div>
+      <div class="field">
+        <label>الرقم التعريفي</label>
+        <input type="text" id="eId" placeholder="اختياري">
+      </div>
+      <div class="field">
+        <label>المسؤول عن تنظيم الاستمارة</label>
+        <input type="text" id="eOfficer" placeholder="اسم موظف المتابعة">
+      </div>
+      <div class="field">
+        <label>الرصيد السنوي</label>
+        <input type="text" id="eBalance" value="18 يوم">
+      </div>
+      <div class="field">
+        <label>تاريخ فتح الاستمارة</label>
+        <input type="date" id="eOpen">
+      </div>
+      <div class="field">
+        <label>تاريخ غلق الاستمارة</label>
+        <input type="date" id="eClose">
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn" id="cancelAddEmp">إلغاء</button>
+      <button class="btn solid" id="confirmAddEmp">إضافة الموظف</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============ MODAL: add record ============ -->
+<div class="overlay" id="overlay">
+  <div class="modal">
+    <div class="modal-head">
+      <span>إضافة طلب إجازة جديد</span>
+      <button id="closeModal">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div class="field full">
+        <label>نوع الإجازة *</label>
+        <select id="fType">
+          <option value="اعتيادية">إجازة اعتيادية</option>
+          <option value="مرضية">إجازة مرضية</option>
+          <option value="زمنية">إجازة زمنية (ساعات)</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>تاريخ طلب الإجازة</label>
+        <input type="date" id="fReqDate">
+      </div>
+      <div class="field">
+        <label>مدة الإجازة</label>
+        <input type="text" id="fDuration" placeholder="مثال: يوم واحد">
+      </div>
+
+      <!-- date range (اعتيادية / مرضية) -->
+      <div class="field dateGroup">
+        <label>من (تاريخ)</label>
+        <input type="date" id="fFromDate">
+      </div>
+      <div class="field dateGroup">
+        <label>إلى (تاريخ)</label>
+        <input type="date" id="fToDate">
+      </div>
+
+      <!-- time range (زمنية) - 12 hour -->
+      <div class="field timeGroup full">
+        <label>من (الوقت)</label>
+        <div style="display:flex; gap:6px;">
+          <select id="fFromHour"></select>
+          <select id="fFromMin"></select>
+          <select id="fFromAmpm"><option value="ص">صباحًا</option><option value="م">مساءً</option></select>
+        </div>
+      </div>
+      <div class="field timeGroup full">
+        <label>إلى (الوقت)</label>
+        <div style="display:flex; gap:6px;">
+          <select id="fToHour"></select>
+          <select id="fToMin"></select>
+          <select id="fToAmpm"><option value="ص">صباحًا</option><option value="م">مساءً</option></select>
+        </div>
+      </div>
+
+      <div class="field">
+        <label>الموظف البديل</label>
+        <input type="text" id="fSub" placeholder="اسم الموظف البديل (اختياري)">
+      </div>
+      <div class="field">
+        <label>ملاحظة الرصيد</label>
+        <input type="text" id="fRemaining" placeholder="مثال: بدون راتب (اختياري)">
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn" id="cancelAdd">إلغاء</button>
+      <button class="btn solid" id="confirmAdd">حفظ الطلب</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const DEFAULT_EMPLOYEES = [{"name": "عمار ياسر  يحيى", "dept": "المتابعة", "idnum": "", "formOfficer": "احمد حسين علي", "balanceStart": "18 يوم", "openDate": "1 / 11 / 2025", "closeDate": "1 / 11 / 2026", "records": [{"t": "1", "reqDate": "2025-11-23", "duration": "ساعتان", "from": "02:00", "to": "04:00", "empSig": "", "directApproval": "", "managerApproval": "", "substitute": "", "timeDate": "2025-11-23", "timeHour": "ساعتان", "remaining": ""}, {"t": "2", "reqDate": "2025-12-14", "duration": "يوم واحد", "from": "2026-12-14", "to": "2026-12-14", "empSig": "", "directApproval": "", "managerApproval": "", "substitute": "", "timeDate": "", "timeHour": "", "remaining": ""}, {"t": "3", "reqDate": "2025-12-28", "duration": "ساعة واحدة", "from": "04:30", "to": "05:30", "empSig": "", "directApproval": "", "managerApproval": "", "substitute": "", "timeDate": "2026-12-28", "timeHour": "ساعة واحد", "remaining": ""}, {"t": "4", "reqDate": "2026-01-06", "duration": "يوم واحد", "from": "2026-01-06", "to": "2026-01-06", "empSig": "", "directApproval": "", "managerApproval": "", "substitute": "", "timeDate": "", "timeHour": "", "remaining": ""}, {"t": "5", "reqDate": "2026-01-25", "duration": "يومان", "from": "2026-01-25", "to": "2026-01-26", "empSig": "", "directApproval": "", "managerApproval": "", "substitute": "", "timeDate": "", "timeHour": "", "remaining": ""}, {"t": "6", "reqDate": "2026-02-21", "duration": "يوم واحد", "from": "2026-02-21", "to": "2026-02-21", "empSig": "", "directApproval": "", "managerApproval": "", "substitute": "", "timeDate": "", "timeHour": "", "remaining": ""}]}, {"name": "احمد هادي برد", "dept": "المتابعة", "idnum": "", "formOfficer": "احمد حسين علي", "balanceStart": "18 يوم", "openDate": "1 / 11 / 2025", "closeDate": "1 / 11 / 2026", "records": []}, {"name": "الحسن خالد احمد", "dept": "المتابعة", "idnum": "", "formOfficer": "احمد حسين علي", "balanceStart": "18 يوم", "openDate": "1 / 11 / 2025", "closeDate": "1 / 11 / 2026", "records": []}, {"name": "حسين حسن عبد اللطيف", "dept": "المتابعة", "idnum": "", "formOfficer": "احمد حسين علي", "balanceStart": "18 يوم", "openDate": "1 / 11 / 2025", "closeDate": "1 / 11 / 2026", "records": [{"t": "1", "reqDate": "2025-11-21", "duration": "يوم واحد", "from": "2025-11-21", "to": "2025-11-21", "empSig": "", "directApproval": "", "managerApproval": "", "substitute": "", "timeDate": "", "timeHour": "", "remaining": ""}]}, {"name": "ريام علاء خليل", "dept": "المتابعة", "idnum": "", "formOfficer": "احمد حسين علي", "balanceStart": "18 يوم", "openDate": "1 / 11 / 2025", "closeDate": "1 / 11 / 2026", "records": []}, {"name": "سيف ابرهيم حسن", "dept": "المتابعة", "idnum": "", "formOfficer": "احمد حسين علي", "balanceStart": "18 يوم", "openDate": "1 / 11 / 2025", "closeDate": "1 / 11 / 2026", "records": []}, {"name": "محمد رشيد مجيد", "dept": "المتابعة", "idnum": "", "formOfficer": "احمد حسين علي", "balanceStart": "18 يوم", "openDate": "1 / 11 / 2025", "closeDate": "1 / 11 / 2026", "records": []}, {"name": "محمد ياسين رشيد", "dept": "المتابعة", "idnum": "", "formOfficer": "احمد حسين علي", "balanceStart": "18 يوم", "openDate": "1 / 11 / 2025", "closeDate": "1 / 11 / 2026", "records": [{"t": "1", "reqDate": "2025-12-11", "duration": "يوم واحد", "from": "2026-12-11", "to": "2026-12-11", "empSig": "", "directApproval": "", "managerApproval": "", "substitute": "", "timeDate": "", "timeHour": "", "remaining": ""}, {"t": "2", "reqDate": "2025-12-28", "duration": "يوم واحد", "from": "2026-12-28", "to": "2026-12-28", "empSig": "", "directApproval": "", "managerApproval": "", "substitute": "", "timeDate": "", "timeHour": "", "remaining": ""}, {"t": "3", "reqDate": "2026-01-01", "duration": "ساعتان", "from": "03:00", "to": "05:00", "empSig": "", "directApproval": "", "managerApproval": "", "substitute": "", "timeDate": "2026-01-01", "timeHour": "ساعتان", "remaining": ""}, {"t": "4", "reqDate": "2026-01-16", "duration": "يوم واحد", "from": "2026-01-16", "to": "2026-01-16", "empSig": "", "directApproval": "", "managerApproval": "", "substitute": "", "timeDate": "", "timeHour": "", "remaining": ""}, {"t": "5", "reqDate": "2026-01-18", "duration": "13 يوم", "from": "2026-01-18", "to": "2026-01-30", "empSig": "", "directApproval": "", "managerApproval": "", "substitute": "", "timeDate": "", "timeHour": "", "remaining": "بدون راتب"}]}, {"name": "عائشة عبد الجبار محمد", "dept": "المتابعة", "idnum": "", "formOfficer": "احمد حسين علي", "balanceStart": "18 يوم", "openDate": "1 / 11 / 2025", "closeDate": "1 / 11 / 2026", "records": [{"t": "1", "reqDate": "2025-11-19", "duration": "يوم واحد", "from": "2025-11-20", "to": "2025-11-20", "empSig": "", "directApproval": "", "managerApproval": "", "substitute": "", "timeDate": "", "timeHour": "", "remaining": ""}, {"t": "2", "reqDate": "2026-02-10", "duration": "يوم واحد", "from": "2026-02-10", "to": "2026-02-10", "empSig": "", "directApproval": "", "managerApproval": "", "substitute": "", "timeDate": "", "timeHour": "", "remaining": ""}]}, {"name": "احمد كمال صالح", "dept": "المتابعة", "idnum": "", "formOfficer": "احمد حسين علي", "balanceStart": "18 يوم", "openDate": "1 / 11 / 2025", "closeDate": "1 / 11 / 2026", "records": [{"t": "1", "reqDate": "2025-11-26", "duration": "يوم واحد", "from": "2025-11-26", "to": "2025-11-26", "empSig": "", "directApproval": "", "managerApproval": "", "substitute": "", "timeDate": "", "timeHour": "", "remaining": ""}, {"t": "2", "reqDate": "2025-12-15", "duration": "يوم واحد", "from": "2026-12-15", "to": "2026-12-15", "empSig": "", "directApproval": "", "managerApproval": "", "substitute": "", "timeDate": "", "timeHour": "", "remaining": ""}, {"t": "3", "reqDate": "2025-12-25", "duration": "يوم واحد", "from": "2026-12-25", "to": "2026-12-25", "empSig": "", "directApproval": "", "managerApproval": "", "substitute": "", "timeDate": "", "timeHour": "", "remaining": ""}, {"t": "4", "reqDate": "2026-01-29", "duration": "ثلاث ساعات", "from": "04:00", "to": "07:00", "empSig": "", "directApproval": "", "managerApproval": "", "substitute": "", "timeDate": "", "timeHour": "", "remaining": ""}, {"t": "5", "reqDate": "2026-02-07", "duration": "ستة أيام", "from": "2026-02-07", "to": "2026-02-12", "empSig": "", "directApproval": "", "managerApproval": "", "substitute": "", "timeDate": "", "timeHour": "", "remaining": ""}]}, {"name": "زهراء يحيى ياسين", "dept": "المتابعة", "idnum": "", "formOfficer": "احمد حسين علي", "balanceStart": "18 يوم", "openDate": "1 /  11 / 2025", "closeDate": "1 / 11 / 2026", "records": [{"t": "1", "reqDate": "2025-11-22", "duration": "ساعة واحدة", "from": "03:00", "to": "04:00", "empSig": "", "directApproval": "", "managerApproval": "", "substitute": "", "timeDate": "2025-11-22", "timeHour": "ساعة واحدة", "remaining": ""}, {"t": "2", "reqDate": "2025-11-25", "duration": "يوم واحد", "from": "2025-11-25", "to": "2025-11-25", "empSig": "", "directApproval": "", "managerApproval": "", "substitute": "", "timeDate": "", "timeHour": "", "remaining": ""}, {"t": "3", "reqDate": "2025-11-29", "duration": "ساعتان", "from": "02:00", "to": "04:00", "empSig": "", "directApproval": "", "managerApproval": "", "substitute": "", "timeDate": "2025-11-29", "timeHour": "ساعتان", "remaining": ""}, {"t": "4", "reqDate": "2026-02-04", "duration": "ساعتان", "from": "02:00", "to": "04:00", "empSig": "", "directApproval": "", "managerApproval": "", "substitute": "", "timeDate": "2026-02-04", "timeHour": "ساعتان", "remaining": ""}]}, {"name": "طيبة إسماعيل إبراهيم", "dept": "المتابعة", "idnum": "", "formOfficer": "احمد حسين علي", "balanceStart": "18 يوم", "openDate": "1 / 11 / 2025", "closeDate": "1 / 11 / 2026", "records": [{"t": "1", "reqDate": "2025-11-18", "duration": "يوم واحد", "from": "2025-11-18", "to": "2025-11-18", "empSig": "", "directApproval": "", "managerApproval": "", "substitute": "", "timeDate": "", "timeHour": "", "remaining": ""}, {"t": "2", "reqDate": "2026-02-08", "duration": "ساعتان", "from": "02:00", "to": "04:00", "empSig": "", "directApproval": "", "managerApproval": "", "substitute": "", "timeDate": "2026-02-08", "timeHour": "ساعتان", "remaining": ""}]}, {"name": "احمد ماجد سجاد", "dept": "المتابعة", "idnum": "", "formOfficer": "احمد حسين علي", "balanceStart": "18 يوم", "openDate": "1 / 11 / 2025", "closeDate": "1 / 11 / 2026", "records": [{"t": "1", "reqDate": "2026-01-13", "duration": "يوم واحد", "from": "2026-01-13", "to": "2026-01-13", "empSig": "", "directApproval": "", "managerApproval": "", "substitute": "", "timeDate": "", "timeHour": "", "remaining": ""}, {"t": "2", "reqDate": "2026-02-08", "duration": "يوم واحد", "from": "2026-02-08", "to": "2026-02-08", "empSig": "", "directApproval": "", "managerApproval": "", "substitute": "", "timeDate": "", "timeHour": "", "remaining": ""}]}, {"name": "سجاد وليد عبود", "dept": "المتابعة", "idnum": "", "formOfficer": "احمد حسين علي", "balanceStart": "18 يوم", "openDate": "1 / 11 / 2025", "closeDate": "1 / 11 / 2026", "records": [{"t": "1", "reqDate": "2026-02-02", "duration": "ساعتان", "from": "08:00", "to": "10:00", "empSig": "", "directApproval": "", "managerApproval": "", "substitute": "", "timeDate": "2026-02-02", "timeHour": "ساعتان", "remaining": ""}, {"t": "2", "reqDate": "2026-02-03", "duration": "يوم واحد", "from": "2026-02-03", "to": "2026-02-03", "empSig": "", "directApproval": "", "managerApproval": "", "substitute": "", "timeDate": "", "timeHour": "", "remaining": ""}]}, {"name": "اية نجم عبد الله", "dept": "المتابعة", "idnum": "", "formOfficer": "احمد حسين علي", "balanceStart": "18 يوم", "openDate": "1 / 11 / 2025", "closeDate": "1 / 11 / 2026", "records": []}, {"name": "حسن مجيد عبود", "dept": "المتابعة", "idnum": "", "formOfficer": "احمد حسين علي", "balanceStart": "18 يوم", "openDate": "1 / 12 / 2025", "closeDate": "1 / 12 / 2026", "records": [{"t": "1", "reqDate": "2025-12-25", "duration": "يوم واحد", "from": "2026-12-25", "to": "2026-12-25", "empSig": "", "directApproval": "", "managerApproval": "", "substitute": "", "timeDate": "", "timeHour": "", "remaining": ""}, {"t": "2", "reqDate": "2026-12-27", "duration": "يومان", "from": "2026-12-27", "to": "2026-12-28", "empSig": "", "directApproval": "", "managerApproval": "", "substitute": "", "timeDate": "", "timeHour": "", "remaining": ""}, {"t": "3", "reqDate": "2026-01-07", "duration": "3 ساعات", "from": "07:00", "to": "10:00", "empSig": "", "directApproval": "", "managerApproval": "", "substitute": "", "timeDate": "2026-01-07", "timeHour": "3 ساعات", "remaining": ""}]}, {"name": "عمر اثير طارق", "dept": "المتابعة", "idnum": "", "formOfficer": "احمد حسين علي", "balanceStart": "18 يوم", "openDate": "1 / 12 / 2025", "closeDate": "1 / 12/ 2026", "records": [{"t": "1", "reqDate": "2025-12-31", "duration": "يوم واحد", "from": "2026-12-31", "to": "2026-12-31", "empSig": "", "directApproval": "", "managerApproval": "", "substitute": "", "timeDate": "", "timeHour": "", "remaining": ""}, {"t": "2", "reqDate": "2026-01-25", "duration": "ساعتان", "from": "05:00", "to": "07:00", "empSig": "", "directApproval": "", "managerApproval": "", "substitute": "", "timeDate": "2026-01-25", "timeHour": "ساعتان", "remaining": ""}]}, {"name": "عبد الله حيدر هادي", "dept": "المتابعة", "idnum": "", "formOfficer": "احمد حسين علي", "balanceStart": "18 يوم", "openDate": "1 / 12 / 2025", "closeDate": "1 / 12/ 2026", "records": [{"t": "1", "reqDate": "2025-12-31", "duration": "يوم اوحد", "from": "2026-12-31", "to": "2026-12-31", "empSig": "", "directApproval": "", "managerApproval": "", "substitute": "", "timeDate": "", "timeHour": "", "remaining": ""}, {"t": "2", "reqDate": "2026-01-18", "duration": "يوم واحد", "from": "2026-01-18", "to": "2026-01-18", "empSig": "", "directApproval": "", "managerApproval": "", "substitute": "", "timeDate": "", "timeHour": "", "remaining": ""}, {"t": "3", "reqDate": "2026-01-17", "duration": "ساعة واحدة", "from": "03:00", "to": "04:00", "empSig": "", "directApproval": "", "managerApproval": "", "substitute": "", "timeDate": "", "timeHour": "", "remaining": ""}, {"t": "4", "reqDate": "2026-02-07", "duration": "يوم واحد", "from": "2026-02-07", "to": "2026-02-07", "empSig": "", "directApproval": "", "managerApproval": "", "substitute": "", "timeDate": "", "timeHour": "", "remaining": ""}]}, {"name": "محمد ليث حميد", "dept": "المتابعة", "idnum": "", "formOfficer": "احمد حسين علي", "balanceStart": "18 يوم", "openDate": "1 / 1/ 2026", "closeDate": "1 / 1 / 2027", "records": [{"t": "1", "reqDate": "2026-01-14", "duration": "يوم واحد", "from": "2026-01-14", "to": "2026-01-14", "empSig": "", "directApproval": "", "managerApproval": "", "substitute": "", "timeDate": "", "timeHour": "", "remaining": ""}, {"t": "2", "reqDate": "2026-02-03", "duration": "ثلاث ساعات", "from": "07:00", "to": "10:00", "empSig": "", "directApproval": "", "managerApproval": "", "substitute": "", "timeDate": "", "timeHour": "", "remaining": ""}]}, {"name": "صديق اثير عبد الله", "dept": "المتابعة", "idnum": "", "formOfficer": "احمد حسين علي", "balanceStart": "18 يوم", "openDate": "1 / 1 / 2026", "closeDate": "1 / 1 / 2027", "records": [{"t": "1", "reqDate": "2026-01-11", "duration": "ساعة واحدة", "from": "03:00", "to": "04:00", "empSig": "", "directApproval": "", "managerApproval": "", "substitute": "", "timeDate": "2026-01-11", "timeHour": "ساعة واحدة", "remaining": ""}]}, {"name": "رقية علي سالم", "dept": "المتابعة", "idnum": "", "formOfficer": "احمد حسين علي", "balanceStart": "18 يوم", "openDate": "1 / 1 / 2026", "closeDate": "1 / 1 / 2027", "records": [{"t": "1", "reqDate": "2026-01-11", "duration": "يوم واحد", "from": "2026-01-11", "to": "2026-01-11", "empSig": "", "directApproval": "", "managerApproval": "", "substitute": "", "timeDate": "", "timeHour": "", "remaining": ""}, {"t": "2", "reqDate": "2026-01-13", "duration": "ثلاثة أيام", "from": "2026-01-13", "to": "2026-01-15", "empSig": "", "directApproval": "", "managerApproval": "", "substitute": "", "timeDate": "", "timeHour": "", "remaining": ""}]}, {"name": "عبد الله رزاق عبد الله", "dept": "المتابعة", "idnum": "", "formOfficer": "احمد حسين علي", "balanceStart": "18 يوم", "openDate": "1 / 1 / 2026", "closeDate": "1 / 1 / 2027", "records": [{"t": "1", "reqDate": "2026-01-03", "duration": "ساعتان", "from": "08:00", "to": "10:00", "empSig": "", "directApproval": "", "managerApproval": "", "substitute": "", "timeDate": "2026-01-03", "timeHour": "ساعتان", "remaining": ""}, {"t": "2", "reqDate": "2026-01-31", "duration": "يوم واحد", "from": "2026-01-31", "to": "2026-01-31", "empSig": "", "directApproval": "", "managerApproval": "", "substitute": "", "timeDate": "", "timeHour": "", "remaining": ""}]}];
+
+let EMPLOYEES = [];
+let activeIndex = -1;
+
+// ---------- Firebase sync ----------
+let suppressNextSave = false;   // true while we're applying a remote update
+let saveDebounceTimer = null;
+let firebaseReady = false;
+
+function showSyncStatus(text, isError){
+  showToast(text, isError ? 'error' : 'info');
+}
+
+// ---------- Cloud-save toast notification ----------
+// Small floating notification in the corner: shows "تم الحفظ في السحابة ☁️"
+// briefly after every successful save, and a persistent, hard-to-miss
+// warning (with a retry button) if a save actually fails — so a failed
+// save is never silent again.
+let toastEl = null;
+let toastHideTimer = null;
+
+function ensureToastEl(){
+  if(toastEl) return toastEl;
+  toastEl = document.createElement('div');
+  toastEl.id = 'cloudSaveToast';
+  toastEl.style.cssText = `
+    position:fixed; bottom:18px; left:18px; z-index:99999;
+    font-family:'Tajawal',sans-serif; font-size:13.5px; font-weight:700;
+    padding:10px 16px; border-radius:10px; color:#fff;
+    box-shadow:0 8px 24px rgba(0,0,0,.25);
+    display:flex; align-items:center; gap:10px;
+    opacity:0; transform:translateY(8px);
+    transition:opacity .25s ease, transform .25s ease;
+    pointer-events:none;
+  `;
+  document.body.appendChild(toastEl);
+  return toastEl;
+}
+
+function showToast(text, kind){ // kind: 'saving' | 'success' | 'error' | 'info'
+  const el = ensureToastEl();
+  clearTimeout(toastHideTimer);
+
+  const colors = {
+    saving:  'rgba(22,40,61,.94)',
+    success: 'rgba(22,163,74,.95)',
+    error:   'rgba(190,45,45,.96)',
+    info:    'rgba(22,40,61,.94)'
+  };
+  el.style.background = colors[kind] || colors.info;
+  el.style.pointerEvents = kind === 'error' ? 'auto' : 'none';
+
+  if(kind === 'error'){
+    el.innerHTML = `<span>⚠️ ${text}</span>
+      <button onclick="retrySave()" style="background:rgba(255,255,255,.2);border:1px solid rgba(255,255,255,.5);color:#fff;padding:4px 10px;border-radius:6px;cursor:pointer;font-family:inherit;font-size:12px;font-weight:700">إعادة المحاولة</button>`;
+  } else {
+    el.textContent = text;
+  }
+
+  // fade in
+  requestAnimationFrame(()=>{
+    el.style.opacity = '1';
+    el.style.transform = 'translateY(0)';
+  });
+
+  // auto-hide everything except persistent errors
+  if(kind !== 'error'){
+    toastHideTimer = setTimeout(()=>{
+      el.style.opacity = '0';
+      el.style.transform = 'translateY(8px)';
+    }, kind === 'saving' ? 4000 : 2200);
+  }
+}
+
+function retrySave(){
+  showToast('جارِ إعادة المحاولة...', 'saving');
+  fbDB.ref(LEAVE_DB_PATH).set(EMPLOYEES)
+    .then(()=> showToast('☁️ تم الحفظ في السحابة', 'success'))
+    .catch(err => {
+      console.error('Firebase retry save failed', err);
+      showToast('فشل الحفظ في السحابة — ' + (err.message || 'تحقق من قواعد الأمان في Firebase'), 'error');
+    });
+}
+
+function saveToFirebase(){
+  if(suppressNextSave){ suppressNextSave = false; return; }
+  if(!firebaseReady) return;
+  clearTimeout(saveDebounceTimer);
+  showToast('جارِ الحفظ...', 'saving');
+  saveDebounceTimer = setTimeout(()=>{
+    fbDB.ref(LEAVE_DB_PATH).set(EMPLOYEES)
+      .then(()=> showToast('☁️ تم الحفظ في السحابة', 'success'))
+      .catch(err => {
+        console.error('Firebase save failed', err);
+        showToast('فشل الحفظ في السحابة — ' + (err.message || 'تحقق من قواعد الأمان في Firebase'), 'error');
+      })
+      .finally(()=>{ saveDebounceTimer = null; });
+  }, 500);
+}
+
+// Firebase Realtime Database silently drops empty arrays/objects on save,
+// and can also turn an array with gaps into a plain object keyed by index.
+// Normalize whatever comes back into a clean employees array so the render
+// code can always rely on emp.records being an array.
+function normalizeEmployees(data){
+  let list;
+  if(Array.isArray(data)){
+    list = data;
+  } else if(data && typeof data === 'object'){
+    // object shape (sparse array or otherwise) -> sort by numeric key if possible
+    list = Object.keys(data)
+      .sort((a,b)=> (isNaN(a)||isNaN(b)) ? 0 : Number(a)-Number(b))
+      .map(k => data[k]);
+  } else {
+    list = [];
+  }
+  return list.filter(Boolean).map(emp => ({
+    ...emp,
+    records: Array.isArray(emp.records) ? emp.records : []
+  }));
+}
+
+function startFirebaseSync(){
+  showToast('جارِ الاتصال بقاعدة البيانات...', 'saving');
+  fbDB.ref(LEAVE_DB_PATH).on('value', snap => {
+    const data = snap.val();
+    suppressNextSave = true; // this render was triggered remotely, don't re-save it
+    const normalized = normalizeEmployees(data);
+    if(normalized.length){
+      EMPLOYEES = normalized;
+    } else if(!firebaseReady){
+      // nothing saved yet - seed the database with the built-in starter cards
+      EMPLOYEES = DEFAULT_EMPLOYEES;
+      suppressNextSave = false;
+      saveToFirebase();
+    } else {
+      EMPLOYEES = [];
+    }
+    firebaseReady = true;
+    if(activeIndex >= EMPLOYEES.length) activeIndex = EMPLOYEES.length ? 0 : -1;
+    if(activeIndex < 0 && EMPLOYEES.length) activeIndex = 0;
+    renderAll();
+    showToast('☁️ متصل بالسحابة', 'info');
+  }, err => {
+    console.error('Firebase read failed', err);
+    showToast('تعذر الاتصال بقاعدة البيانات — ' + (err.message || 'تحقق من قواعد الأمان في Firebase'), 'error');
+    // fall back to local starter data so the tool is still usable offline
+    if(!EMPLOYEES.length){
+      EMPLOYEES = DEFAULT_EMPLOYEES;
+      activeIndex = EMPLOYEES.length ? 0 : -1;
+      renderAll();
+    }
+  });
+}
+
+// Use the real signed-in session if one already exists (e.g. the admin
+// logged in on the parent dashboard and this file is loaded in its iframe,
+// same origin => same Firebase Auth persistence). Only fall back to
+// anonymous auth if nobody is signed in yet. This avoids clobbering a real
+// admin session with a throwaway anonymous one, which used to make writes
+// silently fail once the security rules started checking auth.uid.
+let authSyncStarted = false;
+function beginOnce(){
+  if(authSyncStarted) return;
+  authSyncStarted = true;
+  startFirebaseSync();
+}
+
+fbAuth.onAuthStateChanged(user => {
+  if(user){
+    // Already have a session (real admin or previously-created anon user) — use it.
+    beginOnce();
+  }
+});
+
+// Give onAuthStateChanged a brief moment to report an existing/persisted
+// session before we resort to creating a new anonymous one.
+setTimeout(() => {
+  if(fbAuth.currentUser){ beginOnce(); return; }
+  fbAuth.signInAnonymously().catch(err => {
+    console.log('Anonymous auth unavailable, continuing without auth:', err.message);
+  }).finally(beginOnce);
+}, 800);
+
+// Warn before leaving the page if a save is still queued/in-flight, so a
+// closed tab never silently drops the last edit.
+window.addEventListener('beforeunload', (e)=>{
+  if(saveDebounceTimer){
+    e.preventDefault();
+    e.returnValue = '';
+  }
+});
+
+// ---------- helpers ----------
+function daysBetweenInclusive(fromStr, toStr){
+  const f = new Date(fromStr);
+  const t = new Date(toStr);
+  if(isNaN(f) || isNaN(t)) return null;
+  const diff = Math.round((t - f) / (1000*60*60*24)) + 1; // inclusive of both ends
+  return diff > 0 ? diff : null;
+}
+
+function toISODate(str){
+  if(!str) return '';
+  const s = str.trim();
+  // already ISO (YYYY-MM-DD)
+  if(/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+  // legacy "D / M / YYYY" style (spacing varies)
+  const m = s.match(/^(\d{1,2})\s*\/\s*(\d{1,2})\s*\/\s*(\d{4})$/);
+  if(m){
+    const [,d,mo,y] = m;
+    return `${y}-${mo.padStart(2,'0')}-${d.padStart(2,'0')}`;
+  }
+  return '';
+}
+
+function parseDurationToDays(rec){
+  // Prefer the exact day count computed from the from/to date range at save
+  // time — this is authoritative. Older records saved before this existed
+  // fall back to a best-effort parse of the Arabic duration text.
+  if(typeof rec.days === 'number') return rec.days;
+  const txt = (rec.duration||'').trim();
+  if(!txt) return 0;
+  const numMap = {'واحد':1,'واحدة':1,'يومان':2,'يوم':1,'يومين':2,'ثلاث':3,'ثلاثة':3,
+    'اربع':4,'أربع':4,'اربعة':4,'أربعة':4,'خمس':5,'خمسة':5,'ست':6,'ستة':6,
+    'سبع':7,'سبعة':7,'ثمان':8,'ثمانية':8,'تسع':9,'تسعة':9,'عشر':10,'عشرة':10,'ساعتان':0.25,'ساعة':0.125};
+  if(txt.includes('ساعة') || txt.includes('ساعتان') || txt.includes('ساعات')){
+    const m = txt.match(/\d+/);
+    if(m) return parseInt(m[0],10)/8;
+    if(txt.includes('ساعتان')) return 2/8;
+    return 1/8;
+  }
+  const digitMatch = txt.match(/\d+/);
+  if(digitMatch) return parseInt(digitMatch[0],10);
+  for(const key in numMap){
+    if(txt.includes(key) && txt.includes('يوم')) return numMap[key];
+  }
+  if(txt.includes('يوم')) return 1;
+  return 0;
+}
+
+function balanceStartNum(emp){
+  const m = (emp.balanceStart||'').match(/\d+(\.\d+)?/);
+  return m ? parseFloat(m[0]) : 0;
+}
+
+function usedDays(emp){
+  // Sick leave (مرضية) does not count against the annual balance.
+  return emp.records.reduce((s,r)=> s + (r.leaveType === 'مرضية' ? 0 : parseDurationToDays(r)), 0);
+}
+
+function remainingDays(emp){
+  const rem = balanceStartNum(emp) - usedDays(emp);
+  return Math.round(rem*100)/100;
+}
+
+// ---------- departments ----------
+function getDepartments(){
+  const set = new Set();
+  EMPLOYEES.forEach(e => { if(e.dept && e.dept.trim()) set.add(e.dept.trim()); });
+  return Array.from(set).sort((a,b)=> a.localeCompare(b,'ar'));
+}
+
+function refreshDeptFilter(){
+  const sel = document.getElementById('deptFilter');
+  const current = sel.value;
+  const depts = getDepartments();
+  sel.innerHTML = '<option value="">كل الأقسام</option>' +
+    depts.map(d=> `<option value="${d}">${d}</option>`).join('');
+  if(depts.includes(current)) sel.value = current;
+}
+
+function refreshEmpDeptSelect(){
+  const sel = document.getElementById('eDept');
+  const depts = getDepartments();
+  sel.innerHTML = depts.map(d=> `<option value="${d}">${d}</option>`).join('') +
+    '<option value="__new__">+ إضافة قسم جديد…</option>';
+}
+
+// ---------- rendering ----------
+function renderSidebar(filter=''){
+  const list = document.getElementById('empList');
+  list.innerHTML = '';
+  const f = filter.trim();
+  const deptSel = document.getElementById('deptFilter').value;
+  EMPLOYEES.forEach((emp, idx) => {
+    if(f && !emp.name.includes(f)) return;
+    if(deptSel && emp.dept !== deptSel) return;
+    const li = document.createElement('li');
+    li.className = 'emp-item' + (idx===activeIndex ? ' active':'');
+    li.innerHTML = `<span class="nm">${emp.name}<br><span style="font-size:10px;color:#a99a70;">${emp.dept||''}</span></span><span class="cnt">${emp.records.length}</span>`;
+    li.addEventListener('click', ()=>{ activeIndex = idx; renderAll(); });
+    list.appendChild(li);
+  });
+  document.getElementById('statEmp').textContent = EMPLOYEES.length;
+  document.getElementById('statRec').textContent = EMPLOYEES.reduce((s,e)=>s+e.records.length,0);
+  refreshDeptFilter();
+}
+
+function fieldOrDash(v){ return v && v.trim() ? v : '—'; }
+
+function renderCard(){
+  const holder = document.getElementById('cardHolder');
+  if(activeIndex < 0 || !EMPLOYEES[activeIndex]){
+    holder.innerHTML = `<div class="no-employee">اختر موظفًا من القائمة الجانبية لعرض بطاقته</div>`;
+    return;
+  }
+  const emp = EMPLOYEES[activeIndex];
+  const rem = remainingDays(emp);
+  document.getElementById('toolbarTitle').textContent = `بطاقة متابعة الإجازات — ${emp.name}`;
+
+  let rowsHtml = '';
+  if(emp.records.length === 0){
+    rowsHtml = `<tr><td colspan="9" class="empty-note">لا توجد طلبات إجازة مسجلة لهذا الموظف بعد</td></tr>`;
+  } else {
+    rowsHtml = emp.records.map((r, ridx) => {
+      const typeColors = {'اعتيادية':'var(--navy)', 'مرضية':'var(--warn)', 'زمنية':'var(--brass)'};
+      const typeLabel = r.leaveType || 'اعتيادية';
+      const color = typeColors[typeLabel] || 'var(--navy)';
+      return `
+      <tr>
+        <td>${r.t}</td>
+        <td><span style="background:${color};color:#fff;padding:3px 9px;border-radius:20px;font-size:11px;">${typeLabel}</span></td>
+        <td>${fieldOrDash(r.reqDate)}</td>
+        <td>${fieldOrDash(r.duration)}</td>
+        <td>${fieldOrDash(r.from)}</td>
+        <td>${fieldOrDash(r.to)}</td>
+        <td>${fieldOrDash(r.substitute)}</td>
+        <td>${fieldOrDash(r.remaining)}</td>
+        <td><button class="row-del" data-idx="${ridx}" title="حذف">✕</button></td>
+      </tr>
+    `;}).join('');
+  }
+
+  holder.innerHTML = `
+    <div class="card">
+      <div class="card-head">
+        <div>
+          <div class="title">${emp.name}</div>
+          <div class="sub">${emp.dept || 'قسم المتابعة'} ${emp.idnum ? ' — الرقم التعريفي: '+emp.idnum : ''}</div>
+        </div>
+        <div class="badge-balance">
+          <b>${rem}</b>
+          <span>الرصيد المتبقي</span>
+        </div>
+      </div>
+
+      <div class="meta-grid">
+        <div class="meta-cell">
+          <label>الرصيد السنوي</label>
+          <input type="text" value="${emp.balanceStart}" data-field="balanceStart">
+        </div>
+        <div class="meta-cell">
+          <label>تاريخ فتح الاستمارة</label>
+          <input type="date" value="${toISODate(emp.openDate)}" data-field="openDate">
+        </div>
+        <div class="meta-cell">
+          <label>تاريخ غلق الاستمارة</label>
+          <input type="date" value="${toISODate(emp.closeDate)}" data-field="closeDate">
+        </div>
+        <div class="meta-cell">
+          <label>المسؤول عن الاستمارة</label>
+          <input type="text" value="${emp.formOfficer}" data-field="formOfficer">
+        </div>
+      </div>
+
+      <div style="overflow-x:auto;">
+        <table class="records">
+          <thead>
+            <tr>
+              <th>ت</th>
+              <th>النوع</th>
+              <th>تاريخ الطلب</th>
+              <th>مدة الإجازة</th>
+              <th>من</th>
+              <th>إلى</th>
+              <th>الموظف البديل</th>
+              <th>ملاحظة</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>${rowsHtml}</tbody>
+        </table>
+      </div>
+
+      <div class="card-foot">
+        <div class="officer">تنظيم الاستمارة: <b>${emp.formOfficer || '—'}</b></div>
+        <div class="officer">إجمالي الأيام المستخدمة (تقريبي): <b>${usedDays(emp)}</b> يوم</div>
+      </div>
+    </div>
+  `;
+
+  // meta field edits
+  holder.querySelectorAll('.meta-cell input').forEach(inp=>{
+    inp.addEventListener('change', e=>{
+      emp[e.target.dataset.field] = e.target.value;
+      renderCard();
+      saveToFirebase();
+    });
+  });
+  // delete row
+  holder.querySelectorAll('.row-del').forEach(btn=>{
+    btn.addEventListener('click', e=>{
+      const i = parseInt(e.target.dataset.idx,10);
+      emp.records.splice(i,1);
+      emp.records.forEach((r,ix)=> r.t = String(ix+1));
+      renderAll();
+    });
+  });
+}
+
+function renderAll(){
+  renderSidebar(document.getElementById('searchBox').value);
+  renderCard();
+  saveToFirebase();
+}
+
+// ---------- events ----------
+document.getElementById('searchBox').addEventListener('input', e=> renderSidebar(e.target.value));
+document.getElementById('deptFilter').addEventListener('change', ()=> renderSidebar(document.getElementById('searchBox').value));
+document.getElementById('printBtn').addEventListener('click', ()=> window.print());
+
+// populate 12-hour time selects (hour 1-12, minute 00/05/../55)
+function fillTimeSelect(hourId, minId){
+  const hourSel = document.getElementById(hourId);
+  const minSel = document.getElementById(minId);
+  hourSel.innerHTML = Array.from({length:12}, (_,i)=> i+1).map(h=> `<option value="${h}">${h}</option>`).join('');
+  minSel.innerHTML = Array.from({length:12}, (_,i)=> i*5).map(m=> `<option value="${m}">${String(m).padStart(2,'0')}</option>`).join('');
+}
+fillTimeSelect('fFromHour','fFromMin');
+fillTimeSelect('fToHour','fToMin');
+
+function toggleLeaveTypeFields(){
+  const type = document.getElementById('fType').value;
+  const isTime = (type === 'زمنية');
+  document.querySelectorAll('.dateGroup').forEach(el=> el.style.display = isTime ? 'none' : '');
+  document.querySelectorAll('.timeGroup').forEach(el=> el.style.display = isTime ? '' : 'none');
+  const durField = document.getElementById('fDuration');
+  if(isTime){
+    durField.placeholder = 'سيُحسب تلقائيًا من الوقت المحدد';
+    durField.readOnly = false;
+  } else {
+    durField.placeholder = 'سيُحسب تلقائيًا من التاريخين أعلاه';
+    durField.readOnly = true;
+    updateAutoDuration();
+  }
+}
+document.getElementById('fType').addEventListener('change', toggleLeaveTypeFields);
+
+// Recompute "مدة الإجازة" automatically from the selected from/to dates
+// (inclusive day count) so it's never out of sync with what gets charged
+// to the balance.
+function updateAutoDuration(){
+  const type = document.getElementById('fType').value;
+  if(type === 'زمنية') return;
+  const from = document.getElementById('fFromDate').value;
+  const to = document.getElementById('fToDate').value;
+  const durField = document.getElementById('fDuration');
+  const days = daysBetweenInclusive(from, to);
+  if(days === null){ durField.value=''; return; }
+  durField.value = days === 1 ? 'يوم واحد' : `${days} يوم`;
+}
+document.getElementById('fFromDate').addEventListener('change', updateAutoDuration);
+document.getElementById('fToDate').addEventListener('change', updateAutoDuration);
+
+const overlay = document.getElementById('overlay');
+document.getElementById('addRecordBtn').addEventListener('click', ()=>{
+  if(activeIndex < 0){ alert('يرجى اختيار موظف أولاً'); return; }
+  ['fReqDate','fDuration','fFromDate','fToDate','fSub','fRemaining'].forEach(id=> document.getElementById(id).value='');
+  document.getElementById('fType').value = 'اعتيادية';
+  toggleLeaveTypeFields();
+  overlay.classList.add('show');
+});
+document.getElementById('closeModal').addEventListener('click', ()=> overlay.classList.remove('show'));
+document.getElementById('cancelAdd').addEventListener('click', ()=> overlay.classList.remove('show'));
+overlay.addEventListener('click', e=>{ if(e.target===overlay) overlay.classList.remove('show'); });
+
+function to12hStr(hour, min, ampm){
+  return `${hour}:${String(min).padStart(2,'0')} ${ampm==='ص' ? 'صباحًا' : 'مساءً'}`;
+}
+
+document.getElementById('confirmAdd').addEventListener('click', ()=>{
+  const emp = EMPLOYEES[activeIndex];
+  const type = document.getElementById('fType').value;
+  let from, to, duration;
+
+  if(type === 'زمنية'){
+    const fh = parseInt(document.getElementById('fFromHour').value,10);
+    const fm = parseInt(document.getElementById('fFromMin').value,10);
+    const fa = document.getElementById('fFromAmpm').value;
+    const th = parseInt(document.getElementById('fToHour').value,10);
+    const tm = parseInt(document.getElementById('fToMin').value,10);
+    const ta = document.getElementById('fToAmpm').value;
+    from = to12hStr(fh, fm, fa);
+    to = to12hStr(th, tm, ta);
+    // rough hour diff for auto duration text (24h conversion)
+    const to24 = (h,a)=> (a==='م' && h!==12) ? h+12 : (a==='ص' && h===12 ? 0 : h);
+    const startMin = to24(fh,fa)*60 + fm;
+    const endMin = to24(th,ta)*60 + tm;
+    let diff = endMin - startMin;
+    if(diff < 0) diff += 24*60;
+    const hrs = Math.round((diff/60)*10)/10;
+    duration = document.getElementById('fDuration').value.trim() || `${hrs} ساعة`;
+  } else {
+    from = document.getElementById('fFromDate').value;
+    to = document.getElementById('fToDate').value;
+    duration = document.getElementById('fDuration').value.trim();
+  }
+
+  if(!duration){ alert('يرجى إدخال مدة الإجازة'); return; }
+
+  const rec = {
+    t: String(emp.records.length+1),
+    leaveType: type,
+    reqDate: document.getElementById('fReqDate').value,
+    duration: duration,
+    days: (type !== 'زمنية') ? daysBetweenInclusive(from, to) : null,
+    from: from,
+    to: to,
+    empSig:'', directApproval:'', managerApproval:'',
+    substitute: document.getElementById('fSub').value,
+    timeDate:'', timeHour:'',
+    remaining: document.getElementById('fRemaining').value
+  };
+  emp.records.push(rec);
+  overlay.classList.remove('show');
+  renderAll();
+});
+
+// ---------- add employee ----------
+const overlayEmp = document.getElementById('overlayEmp');
+document.getElementById('eDept').addEventListener('change', ()=>{
+  const isNew = document.getElementById('eDept').value === '__new__';
+  document.getElementById('eDeptNewWrap').style.display = isNew ? '' : 'none';
+});
+document.getElementById('addEmpBtn').addEventListener('click', ()=>{
+  ['eName','eId','eOfficer','eDeptNew'].forEach(id=> document.getElementById(id).value='');
+  refreshEmpDeptSelect();
+  document.getElementById('eDeptNewWrap').style.display = getDepartments().length ? 'none' : '';
+  if(!getDepartments().length) document.getElementById('eDept').value = '__new__';
+  document.getElementById('eBalance').value = '18 يوم';
+  document.getElementById('eOpen').value = '';
+  document.getElementById('eClose').value = '';
+  overlayEmp.classList.add('show');
+});
+document.getElementById('closeModalEmp').addEventListener('click', ()=> overlayEmp.classList.remove('show'));
+document.getElementById('cancelAddEmp').addEventListener('click', ()=> overlayEmp.classList.remove('show'));
+overlayEmp.addEventListener('click', e=>{ if(e.target===overlayEmp) overlayEmp.classList.remove('show'); });
+
+document.getElementById('confirmAddEmp').addEventListener('click', ()=>{
+  const name = document.getElementById('eName').value.trim();
+  if(!name){ alert('يرجى إدخال اسم الموظف'); return; }
+  let dept = document.getElementById('eDept').value;
+  if(dept === '__new__'){
+    dept = document.getElementById('eDeptNew').value.trim();
+    if(!dept){ alert('يرجى إدخال اسم القسم الجديد'); return; }
+  }
+  const newEmp = {
+    name,
+    dept,
+    idnum: document.getElementById('eId').value.trim(),
+    formOfficer: document.getElementById('eOfficer').value.trim(),
+    balanceStart: document.getElementById('eBalance').value.trim() || '18 يوم',
+    openDate: document.getElementById('eOpen').value.trim(),
+    closeDate: document.getElementById('eClose').value.trim(),
+    records: []
+  };
+  EMPLOYEES.push(newEmp);
+  activeIndex = EMPLOYEES.length - 1;
+  overlayEmp.classList.remove('show');
+  document.getElementById('searchBox').value = '';
+  renderAll();
+});
+
+// ---------- delete employee ----------
+document.getElementById('deleteEmpBtn').addEventListener('click', ()=>{
+  if(activeIndex < 0 || !EMPLOYEES[activeIndex]) return;
+  const emp = EMPLOYEES[activeIndex];
+  if(!confirm(`هل أنت متأكد من حذف بطاقة الموظف "${emp.name}"؟ لا يمكن التراجع عن هذا الإجراء.`)) return;
+  EMPLOYEES.splice(activeIndex, 1);
+  activeIndex = EMPLOYEES.length ? 0 : -1;
+  renderAll();
+});
+
+// ---------- export / import ----------
+document.getElementById('exportBtn').addEventListener('click', ()=>{
+  const blob = new Blob([JSON.stringify(EMPLOYEES, null, 2)], {type:'application/json'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  const stamp = new Date().toISOString().slice(0,10);
+  a.href = url;
+  a.download = `بطاقات_الاجازات_${stamp}.json`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+});
+
+document.getElementById('importBtn').addEventListener('click', ()=>{
+  document.getElementById('importFile').click();
+});
+document.getElementById('importFile').addEventListener('change', (e)=>{
+  const file = e.target.files[0];
+  if(!file) return;
+  const reader = new FileReader();
+  reader.onload = (evt) => {
+    try{
+      const data = JSON.parse(evt.target.result);
+      if(!Array.isArray(data)) throw new Error('bad format');
+      if(!confirm(`سيتم استبدال البيانات الحالية بـ ${data.length} بطاقة موظف من الملف المستورد. متابعة؟`)) return;
+      EMPLOYEES.length = 0;
+      data.forEach(d => EMPLOYEES.push(d));
+      activeIndex = EMPLOYEES.length ? 0 : -1;
+      renderAll();
+    }catch(err){
+      alert('تعذر قراءة الملف. تأكد أنه ملف JSON صادر من هذا البرنامج.');
+    }
+  };
+  reader.readAsText(file);
+  e.target.value = '';
+});
+
+// Initial render happens once Firebase data arrives (see startFirebaseSync above).
+</script>
+</body>
+</html>
