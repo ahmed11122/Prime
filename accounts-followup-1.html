@@ -1,0 +1,1055 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>متابعة حسابات العملاء</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;900&family=IBM+Plex+Mono:wght@400;500&display=swap');
+
+  :root{
+    --bg: #0f1416;
+    --panel: #161d20;
+    --panel-2: #1c2427;
+    --line: #26302f;
+    --ink: #eef2f0;
+    --ink-dim: #9fb0ab;
+    --accent: #3fae7a;
+    --accent-2: #2e8c62;
+    --amber: #d9a441;
+    --red: #c85c4a;
+    --radius: 10px;
+  }
+
+  html[data-theme="light"]{
+    --bg: #f4f6f5;
+    --panel: #ffffff;
+    --panel-2: #eef1f0;
+    --line: #dde3e1;
+    --ink: #16201d;
+    --ink-dim: #5c6a65;
+    --accent: #2e8c62;
+    --accent-2: #256f4e;
+    --amber: #b5791f;
+    --red: #b5453a;
+  }
+
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background: var(--bg);
+    color: var(--ink);
+    font-family: 'Tajawal', sans-serif;
+    min-height:100vh;
+    padding: 32px 20px 80px;
+    transition: background .2s ease, color .2s ease;
+  }
+
+  .wrap{ max-width: 980px; margin: 0 auto; }
+
+  .topbar{
+    display:flex; justify-content:space-between; align-items:flex-start;
+    gap:16px; margin-bottom:28px; flex-wrap:wrap; padding-bottom:18px;
+    border-bottom:1px solid var(--line);
+  }
+  .brand{ display:flex; align-items:center; gap:12px; }
+  .brand-txt{ display:flex; flex-direction:column; line-height:1.3; gap:2px; }
+  .brand-txt b{ font-family:'Tajawal'; font-size:16px; color: var(--ink); }
+  .brand-txt span{ font-family:'Tajawal'; font-size:12px; color: var(--ink-dim); }
+
+  .topbar-actions{
+    display:flex; align-items:center; gap:8px; flex-wrap:wrap; justify-content:flex-start;
+  }
+
+  .theme-toggle{
+    display:flex; align-items:center; gap:6px;
+    background: var(--panel-2); border:1px solid var(--line); border-radius:20px;
+    padding:6px 6px; cursor:pointer; font-family:'Tajawal';
+  }
+  .theme-toggle button{
+    border:none; background:transparent; color: var(--ink-dim); cursor:pointer;
+    padding:6px 12px; border-radius:16px; font-size:12px; font-weight:700; font-family:'Tajawal';
+  }
+  .theme-toggle button.active{ background: var(--accent); color:#08130d; }
+
+  header{
+    display:flex; align-items:flex-end; justify-content:space-between;
+    margin-bottom: 28px; gap:16px; flex-wrap:wrap;
+  }
+  header .title-block{ display:flex; flex-direction:column; gap:4px; }
+  .eyebrow{
+    font-family:'IBM Plex Mono', monospace; font-size:12px; letter-spacing:.12em;
+    color: var(--accent); text-transform:uppercase;
+  }
+  h1{ margin:0; font-size:28px; font-weight:900; }
+  .stats{
+    display:flex; gap:10px; font-family:'IBM Plex Mono', monospace; font-size:13px;
+  }
+  .stat{
+    background: var(--panel); border:1px solid var(--line); border-radius: var(--radius);
+    padding: 10px 16px; text-align:center; min-width:84px;
+  }
+  .stat b{ display:block; font-size:20px; color:var(--accent); font-weight:700; }
+  .stat span{ color: var(--ink-dim); font-size:11px; }
+
+  .toolbar{
+    display:flex; gap:10px; margin-bottom:22px; flex-wrap:wrap;
+  }
+  .btn{
+    font-family:'Tajawal', sans-serif; font-weight:700; font-size:14px;
+    border-radius: 8px; border:1px solid var(--line); cursor:pointer;
+    padding: 10px 18px; background: var(--panel-2); color: var(--ink);
+    transition: all .15s ease;
+  }
+  .btn:hover{ border-color: var(--accent); }
+  .btn.primary{ background: var(--accent); border-color: var(--accent); color:#08130d; }
+  .btn.primary:hover{ background: var(--accent-2); }
+  .btn.ghost{ background:transparent; }
+  .btn:active{ transform: scale(.97); }
+
+  .search{
+    flex:1; min-width:200px;
+    background: var(--panel-2); border:1px solid var(--line); border-radius:8px;
+    padding: 10px 14px; color: var(--ink); font-family:'Tajawal'; font-size:14px;
+  }
+  .search::placeholder{ color: var(--ink-dim); }
+  .search:focus{ outline:none; border-color:var(--accent); }
+
+  .employee{
+    background: var(--panel); border:1px solid var(--line); border-radius: 14px;
+    margin-bottom: 16px; overflow:hidden;
+  }
+  .employee-head{
+    display:flex; align-items:center; justify-content:space-between;
+    padding: 16px 20px; cursor:pointer; gap:12px; flex-wrap:wrap;
+  }
+  .employee-name{
+    display:flex; align-items:center; gap:12px; font-size:17px; font-weight:700;
+  }
+  .avatar{
+    width:38px; height:38px; border-radius:50%; background: var(--panel-2);
+    display:flex; align-items:center; justify-content:center; font-family:'IBM Plex Mono';
+    font-size:14px; color: var(--accent); border:1px solid var(--line); flex-shrink:0;
+  }
+  .progress-mini{
+    font-family:'IBM Plex Mono', monospace; font-size:12px; color: var(--ink-dim);
+    display:flex; align-items:center; gap:8px;
+  }
+  .bar{ width:90px; height:6px; border-radius:4px; background: var(--panel-2); overflow:hidden; border:1px solid var(--line); }
+  .bar-fill{ height:100%; background: var(--accent); transition: width .3s ease; }
+
+  .head-actions{ display:flex; gap:8px; align-items:center; }
+  .icon-btn{
+    background:transparent; border:1px solid var(--line); color:var(--ink-dim);
+    border-radius:6px; width:32px; height:32px; cursor:pointer; font-size:14px;
+    display:flex; align-items:center; justify-content:center;
+  }
+  .icon-btn:hover{ border-color: var(--red); color: var(--red); }
+  .chevron{ transition: transform .2s ease; color: var(--ink-dim); }
+  .employee.open .chevron{ transform: rotate(180deg); }
+
+  .accounts{
+    display:none; padding: 0 20px 18px; border-top:1px solid var(--line);
+  }
+  .employee.open .accounts{ display:block; }
+
+  .account-row{
+    display:flex; align-items:center; gap:10px; padding: 12px 0;
+    border-bottom: 1px dashed var(--line); flex-wrap:wrap;
+  }
+  .account-row:last-of-type{ border-bottom:none; }
+
+  .account-row.checked{ opacity:.55; }
+
+  .cred{
+    font-family:'IBM Plex Mono', monospace; font-size:13px;
+    background: var(--panel-2); border:1px solid var(--line); border-radius:6px;
+    padding: 8px 12px; display:flex; align-items:center; gap:8px; flex:1; min-width:160px;
+  }
+  .cred .label{ color: var(--ink-dim); font-size:11px; }
+  .cred .val{ color: var(--ink); }
+
+  .copy-btn{
+    background: transparent; border:1px solid var(--line); color: var(--accent);
+    border-radius:6px; padding:8px 10px; cursor:pointer; font-size:12px;
+    font-family:'Tajawal'; font-weight:700;
+  }
+  .copy-btn:hover{ background: var(--accent); color:#08130d; }
+  .copy-btn.copied{ background: var(--accent); color:#08130d; }
+
+  .toggle-status{
+    border:1px solid var(--line); border-radius: 20px; padding: 7px 14px;
+    cursor:pointer; font-size:12px; font-weight:700; font-family:'Tajawal';
+    display:flex; align-items:center; gap:6px; background:var(--panel-2); color:var(--ink-dim);
+    white-space:nowrap;
+  }
+  .toggle-status .dot{ width:8px; height:8px; border-radius:50%; background: var(--ink-dim); }
+  .toggle-status.done{ border-color: var(--accent); color: var(--accent); }
+  .toggle-status.done .dot{ background: var(--accent); }
+
+  .del-account{
+    background:transparent; border:none; color: var(--ink-dim); cursor:pointer;
+    font-size:16px; width:28px; height:28px; border-radius:6px;
+  }
+  .del-account:hover{ color: var(--red); background: rgba(200,92,74,.1); }
+
+  .add-account-row{
+    display:flex; gap:8px; margin-top:12px; flex-wrap:wrap;
+  }
+  .add-account-row input{
+    background: var(--panel-2); border:1px solid var(--line); border-radius:6px;
+    padding: 9px 12px; color: var(--ink); font-family:'IBM Plex Mono', monospace;
+    font-size:13px; flex:1; min-width:130px;
+  }
+  .add-account-row input:focus{ outline:none; border-color:var(--accent); }
+
+  .time-badge{
+    font-family:'IBM Plex Mono', monospace; font-size:11px; color: var(--ink-dim);
+    background: var(--panel-2); border:1px solid var(--line); border-radius:20px;
+    padding: 5px 10px; white-space:nowrap;
+  }
+
+  .reminders-box{ margin: 10px 0; display:flex; flex-direction:column; gap:6px; }
+  .reminder-line{
+    display:flex; align-items:center; justify-content:space-between; gap:10px;
+    background: rgba(217,164,65,.1); border:1px solid var(--amber); color: var(--ink);
+    border-radius:8px; padding:8px 12px; font-size:12.5px;
+  }
+  .reminder-line span:first-of-type{ flex:1; }
+
+  .empty-accounts{
+    color: var(--ink-dim); font-size:13px; padding: 16px 0; text-align:center;
+    font-family:'IBM Plex Mono', monospace;
+  }
+
+  .empty-state{
+    text-align:center; padding: 60px 20px; color: var(--ink-dim);
+  }
+  .empty-state .big{ font-size:40px; margin-bottom:12px; }
+
+  .alert-banner{
+    display:none; align-items:center; gap:12px;
+    background: rgba(217,164,65,.12); border:1px solid var(--amber); color: var(--amber);
+    border-radius: 12px; padding: 14px 18px; margin-bottom: 18px; font-size:14px;
+  }
+  .alert-banner.show{ display:flex; }
+  .alert-banner .ico{ font-size:20px; flex-shrink:0; }
+  .alert-banner .txt b{ font-weight:900; }
+  .alert-banner .txt div{ color: var(--ink-dim); font-size:12.5px; margin-top:2px; }
+
+  .account-row:not(.checked){
+    border-right: 3px solid var(--amber); padding-right:10px;
+  }
+
+  .modal-backdrop{
+    display:none; position:fixed; inset:0; background: rgba(0,0,0,.6);
+    align-items:center; justify-content:center; z-index:50; padding:20px;
+    overflow-y:auto;
+  }
+  .modal-backdrop.show{ display:flex; }
+  .modal{
+    background: var(--panel); border:1px solid var(--line); border-radius:14px;
+    padding: 24px; width:100%; max-width:360px;
+    max-height: calc(100vh - 40px); overflow-y:auto; box-sizing:border-box;
+    margin: auto;
+  }
+  .modal h3{ margin:0 0 16px; font-size:17px; }
+  .modal input{
+    width:100%; background: var(--panel-2); border:1px solid var(--line); border-radius:8px;
+    padding: 11px 14px; color: var(--ink); font-family:'Tajawal'; font-size:14px; margin-bottom:12px;
+  }
+  .modal input:focus{ outline:none; border-color: var(--accent); }
+  .modal-actions{ display:flex; gap:10px; justify-content:flex-end; margin-top:6px; }
+
+  .toast{
+    position:fixed; bottom:24px; left:50%; transform:translateX(-50%) translateY(20px);
+    background: var(--accent); color:#08130d; padding: 10px 20px; border-radius:8px;
+    font-weight:700; font-size:13px; opacity:0; pointer-events:none; transition: all .25s ease;
+    z-index:100; font-family:'Tajawal';
+  }
+  .toast.show{ opacity:1; transform:translateX(-50%) translateY(0); }
+
+  .modal.wide{ max-width:560px; }
+  .activity-list{ max-height:50vh; overflow-y:auto; display:flex; flex-direction:column; gap:8px; margin-bottom:14px; }
+  .activity-item{
+    background: var(--panel-2); border:1px solid var(--line); border-radius: var(--radius);
+    padding:10px 12px; font-size:13px; display:flex; flex-direction:column; gap:2px;
+  }
+  .activity-item .a-txt{ color: var(--ink); }
+  .activity-item .a-meta{ color: var(--ink-dim); font-size:11.5px; font-family:'IBM Plex Mono', monospace; }
+  .activity-empty{ color: var(--ink-dim); font-size:13px; text-align:center; padding:20px 0; }
+
+  .app-footer{
+    margin-top:36px; padding-top:18px; border-top:1px solid var(--line);
+    display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;
+    font-family:'Tajawal'; font-size:12px; color: var(--ink-dim);
+  }
+  .app-footer .dev-credit{ font-family:'IBM Plex Mono', monospace; letter-spacing:.02em; }
+  @media (max-width:520px){
+    .app-footer{ flex-direction:column; text-align:center; }
+  }
+
+  .hidden{ display:none !important; }
+
+  @media (max-width:640px){
+    body{ padding: 20px 12px 70px; }
+    header{ flex-direction:column; align-items:stretch; gap:14px; }
+    h1{ font-size:22px; }
+    .stats{
+      display:grid; grid-template-columns: repeat(3, 1fr); gap:8px; width:100%;
+    }
+    .stat{ min-width:0; padding:10px 6px; }
+    .stat b{ font-size:17px; }
+    .stat span{ font-size:10px; }
+
+    .topbar{ flex-direction:column; align-items:stretch; gap:14px; }
+    .topbar-actions{ justify-content:stretch; }
+    .topbar-actions .btn{ flex:1; text-align:center; padding:10px 8px; font-size:12.5px; }
+    .theme-toggle{ flex-shrink:0; }
+    .brand{ justify-content:flex-start; }
+
+    .toolbar{ flex-direction:column; align-items:stretch; }
+    .toolbar .search{ order:-1; width:100%; }
+    .toolbar .btn{ flex:1; text-align:center; }
+
+    .employee-head{ padding:14px 14px; }
+    .employee-name{ font-size:15px; }
+    .progress-mini{ font-size:11px; }
+    .bar{ width:60px; }
+
+    .cred{ min-width:0; width:100%; }
+    .account-row{ gap:8px; }
+    .time-badge{ font-size:10px; padding:4px 8px; }
+
+    .modal{ width:92vw; padding:20px; }
+  }
+
+  @media (max-width:400px){
+    .stats{ grid-template-columns: repeat(2, 1fr); }
+    .topbar-actions{ flex-wrap:wrap; }
+    .topbar-actions .btn{ flex:1 1 45%; }
+  }
+</style>
+</head>
+<body>
+
+<div id="accessGate" style="display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;gap:14px;text-align:center;padding:20px;font-family:'Tajawal',sans-serif;">
+  <div id="accessGateSpinner" style="width:38px;height:38px;border:4px solid rgba(63,174,122,.25);border-top-color:#3fae7a;border-radius:50%;animation:agSpin .8s linear infinite;"></div>
+  <div id="accessGateMsg" style="color:#9fb0ab;font-size:14px;">جارِ التحقق من صلاحية الوصول...</div>
+</div>
+<style>@keyframes agSpin{ to{ transform:rotate(360deg); } }</style>
+
+<div class="wrap" id="appWrap" style="display:none">
+  <div class="topbar">
+    <div class="brand">
+      <div class="brand-txt">
+        <b>متابعة حسابات العملاء</b>
+        <span>نظام متابعة الحسابات</span>
+      </div>
+    </div>
+    <div class="topbar-actions">
+      <div class="theme-toggle" id="themeToggle">
+        <button data-theme-choice="dark" id="darkBtn">🌙 داكن</button>
+        <button data-theme-choice="light" id="lightBtn">☀️ فاتح</button>
+      </div>
+      <button class="btn ghost" id="activityLogBtn">📋 سجل الأنشطة</button>
+    </div>
+  </div>
+  <header>
+    <div class="title-block">
+      <span class="eyebrow">متابعة يومية · Account Check</span>
+      <h1>متابعة حسابات العملاء</h1>
+    </div>
+    <div class="stats">
+      <div class="stat"><b id="statTotal">0</b><span>إجمالي الحسابات</span></div>
+      <div class="stat"><b id="statDone">0</b><span>تم الفحص</span></div>
+      <div class="stat"><b id="statPending">0</b><span>متبقي</span></div>
+      <div class="stat"><b id="statAvg">—</b><span>متوسط وقت الإنجاز</span></div>
+    </div>
+  </header>
+
+  <div class="alert-banner" id="alertBanner">
+    <span class="ico">⚠️</span>
+    <div class="txt">
+      <b id="alertHeadline"></b>
+      <div id="alertDetail"></div>
+    </div>
+  </div>
+
+  <div class="toolbar">
+    <input class="search" id="searchBox" placeholder="ابحث عن عميل...">
+    <button class="btn primary" id="addEmployeeBtn">+ إضافة عميل</button>
+    <button class="btn ghost" id="expandAllBtn">توسيع الكل</button>
+    <button class="btn ghost" id="collapseAllBtn">طي الكل</button>
+    <button class="btn ghost" id="resetDayBtn" style="border-color:var(--amber); color:var(--amber);">🔄 بدء يوم جديد (إعادة تعيين الفحص)</button>
+  </div>
+
+  <div id="employeeList"></div>
+  <div class="empty-state" id="emptyState" style="display:none;">
+    <div class="big">👥</div>
+    لا يوجد عملاء بعد — ابدأ بإضافة أول عميل
+  </div>
+
+  <footer class="app-footer">
+    <span>© <span id="footerYear"></span> أحمد ماجد سجاد. جميع الحقوق محفوظة.</span>
+    <span class="dev-credit">تطوير: أحمد ماجد سجاد</span>
+  </footer>
+</div>
+
+<div class="modal-backdrop" id="employeeModal">
+  <div class="modal">
+    <h3>إضافة عميل جديد</h3>
+    <input type="text" id="newEmployeeName" placeholder="اسم العميل">
+    <div class="modal-actions">
+      <button class="btn ghost" id="cancelEmployee">إلغاء</button>
+      <button class="btn primary" id="confirmEmployee">إضافة</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<div class="modal-backdrop" id="confirmModal">
+  <div class="modal" style="max-width:360px;">
+    <h3 id="confirmTitle">تأكيد</h3>
+    <p id="confirmMsg" style="color:var(--ink-dim); font-size:14px; margin:-6px 0 18px;"></p>
+    <div class="modal-actions">
+      <button class="btn ghost" id="confirmCancelBtn">إلغاء</button>
+      <button class="btn primary" id="confirmOkBtn" style="background:var(--red); border-color:var(--red);">تأكيد الحذف</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-backdrop" id="activityModal">
+  <div class="modal wide">
+    <h3>سجل الأنشطة</h3>
+    <div class="activity-list" id="activityList"></div>
+    <div class="modal-actions">
+      <button class="btn ghost" id="closeActivityModal">إغلاق</button>
+    </div>
+  </div>
+</div>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/12.16.0/firebase-app.js";
+import {
+  getDatabase, ref, set, onValue, update, get
+} from "https://www.gstatic.com/firebasejs/12.16.0/firebase-database.js";
+import {
+  getAuth, onAuthStateChanged
+} from "https://www.gstatic.com/firebasejs/12.16.0/firebase-auth.js";
+
+// ---- Theme (light/dark) — local to this device ----
+(function initTheme(){
+  const saved = localStorage.getItem('theme') || 'dark';
+  document.documentElement.setAttribute('data-theme', saved);
+  updateThemeButtons(saved);
+})();
+
+document.getElementById('footerYear').textContent = new Date().getFullYear();
+
+function updateThemeButtons(theme){
+  document.getElementById('darkBtn').classList.toggle('active', theme === 'dark');
+  document.getElementById('lightBtn').classList.toggle('active', theme === 'light');
+}
+
+document.querySelectorAll('[data-theme-choice]').forEach(btn=>{
+  btn.addEventListener('click', ()=>{
+    const theme = btn.dataset.themeChoice;
+    document.documentElement.setAttribute('data-theme', theme);
+    localStorage.setItem('theme', theme);
+    updateThemeButtons(theme);
+  });
+});
+
+// ==== نفس بيانات مشروع Firebase المستخدم في index.html، حتى تتم مشاركة ====
+// ==== تسجيل الدخول (Auth) وقاعدة البيانات بين النظامين                ====
+const firebaseConfig = {
+  apiKey: "AIzaSyA1q9LiS6EXNCBFmFvytyN-p4KKgP9wym4",
+  authDomain: "prime-e-8eb80.firebaseapp.com",
+  databaseURL: "https://prime-e-8eb80-default-rtdb.firebaseio.com",
+  projectId: "prime-e-8eb80",
+  storageBucket: "prime-e-8eb80.firebasestorage.app",
+  messagingSenderId: "671376930301",
+  appId: "1:671376930301:web:f8b61666314f3149fb5594"
+};
+// =========================================================
+
+const app = initializeApp(firebaseConfig);
+const db = getDatabase(app);
+const auth = getAuth(app);
+
+// The employees/accounts list lives under the workspace owner's node, in
+// the same multi-account isolation scheme as index.html (users/{uid}/...),
+// so each company's data stays fully separate. These are resolved once we
+// know who is logged in and whether they're allowed into this system.
+let dataRef = null;
+let activityRef = null;
+let basePath = null;
+let hasAccess = false;
+let myAccessLevel = 'view'; // 'edit' = admin/manager (full control), 'view' = employee (process/check only)
+
+let activityLog = [];
+let unsubscribeActivity = null;
+
+let employees = [];
+let openState = {};
+let unsubscribeSnapshot = null;
+let isRemoteUpdate = false; // guard so our own writes don't re-trigger a jarring reload
+
+function showAccessGate(msg, isError){
+  document.getElementById('appWrap').style.display = 'none';
+  const gate = document.getElementById('accessGate');
+  gate.style.display = 'flex';
+  document.getElementById('accessGateMsg').textContent = msg;
+  document.getElementById('accessGateMsg').style.color = isError ? '#c85c4a' : '#9fb0ab';
+  document.getElementById('accessGateSpinner').style.display = isError ? 'none' : '';
+}
+
+function grantAccessAndBoot(ownerUid, level){
+  hasAccess = true;
+  myAccessLevel = level === 'edit' ? 'edit' : 'view';
+  basePath = 'users/' + ownerUid + '/accountsFollowUp';
+  dataRef = ref(db, basePath + '/employees');
+  activityRef = ref(db, basePath + '/activityLog');
+  document.getElementById('accessGate').style.display = 'none';
+  document.getElementById('appWrap').style.display = '';
+  applyPermissionUI();
+  startListening();
+  startListeningActivity();
+}
+
+// Hides/disables the actions that only مدير (manager) or المشرف should be
+// able to use. موظف (employee) accounts can still open clients and mark
+// accounts as "تم الفحص" — they just can't add/remove clients or accounts,
+// send reminders, or reset the day.
+function applyPermissionUI(){
+  const canEdit = myAccessLevel === 'edit';
+  const addBtn = document.getElementById('addEmployeeBtn');
+  const resetBtn = document.getElementById('resetDayBtn');
+  if(addBtn) addBtn.style.display = canEdit ? '' : 'none';
+  if(resetBtn) resetBtn.style.display = canEdit ? '' : 'none';
+}
+
+onAuthStateChanged(auth, async (user) => {
+  if(!user){
+    showAccessGate('الرجاء تسجيل الدخول من النظام الرئيسي أولاً.', true);
+    return;
+  }
+  try{
+    const adminSnap = await get(ref(db, 'admins/' + user.uid));
+    if(adminSnap.exists() && adminSnap.val() === true){
+      grantAccessAndBoot(user.uid, 'edit');
+      return;
+    }
+    const memSnap = await get(ref(db, 'members/' + user.uid));
+    const profile = memSnap.exists() ? memSnap.val() : null;
+    if(!profile || profile.disabled){
+      showAccessGate('هذا الحساب غير مفعّل أو تم تعطيله من قبل المشرف.', true);
+      return;
+    }
+    const ownerUid = profile.workspaceOwner || user.uid;
+    // accountsAccessLevel is 'edit' (مدير — full control), 'view' (موظف —
+    // process/check only), or 'none'/missing (no access at all). Older
+    // profiles may still have the boolean canAccessAccounts flag from
+    // before levels existed — treat that as full ('edit') access.
+    let level = profile.accountsAccessLevel || (profile.canAccessAccounts ? 'edit' : 'none');
+    if(profile.isAdmin) level = 'edit';
+    if(level === 'edit' || level === 'view'){
+      grantAccessAndBoot(ownerUid, level);
+    } else {
+      showAccessGate('🚫 ليس لديك صلاحية الوصول إلى نظام متابعة الحسابات. الرجاء التواصل مع المشرف لمنحك هذه الصلاحية.', true);
+    }
+  }catch(err){
+    console.error('access check failed', err);
+    showAccessGate('تعذّر التحقق من صلاحيات الحساب. حاول مجددًا.', true);
+  }
+});
+
+// ---- Prevent accidental reload/close of the tab ----
+window.addEventListener('beforeunload', (e)=>{
+  e.preventDefault();
+  e.returnValue = '';
+  return '';
+});
+
+function saveData(data){
+  isRemoteUpdate = true;
+  set(dataRef, { list: data })
+    .then(()=>{
+      showToast('✅ تم الحفظ في قاعدة البيانات');
+    })
+    .catch(err=>{
+      console.error('Realtime Database save failed:', err);
+      showToast('❌ فشل الحفظ، تحقق من الاتصال');
+    });
+}
+
+// ---- Activity log ----
+function logActivity(text){
+  const entry = {
+    text,
+    ts: Date.now()
+  };
+  const entryId = uid();
+  update(ref(db, basePath + '/activityLog/' + entryId), entry).catch(err=>{
+    console.error('Activity log write failed:', err);
+  });
+}
+
+function startListeningActivity(){
+  if(unsubscribeActivity) return;
+  unsubscribeActivity = onValue(activityRef, (snap)=>{
+    const data = snap.exists() ? snap.val() : {};
+    activityLog = Object.values(data).sort((a,b)=> b.ts - a.ts).slice(0, 200);
+    renderActivity();
+  }, (err)=>{
+    console.error('Activity log listen failed:', err);
+  });
+}
+
+function renderActivity(){
+  const list = document.getElementById('activityList');
+  if(!activityLog.length){
+    list.innerHTML = '<div class="activity-empty">لا يوجد نشاط مسجل بعد</div>';
+    return;
+  }
+  list.innerHTML = activityLog.map(a=>`
+    <div class="activity-item">
+      <span class="a-txt">${escapeHtml(a.text)}</span>
+      <span class="a-meta">${formatClock(a.ts)}</span>
+    </div>
+  `).join('');
+}
+
+// ---- Custom confirm dialog (replaces native confirm()) ----
+function confirmDialog(msg, title){
+  return new Promise((resolve)=>{
+    const modal = document.getElementById('confirmModal');
+    document.getElementById('confirmTitle').textContent = title || 'تأكيد الحذف';
+    document.getElementById('confirmMsg').textContent = msg;
+    const okBtn = document.getElementById('confirmOkBtn');
+    const cancelBtn = document.getElementById('confirmCancelBtn');
+    function cleanup(result){
+      modal.classList.remove('show');
+      okBtn.removeEventListener('click', onOk);
+      cancelBtn.removeEventListener('click', onCancel);
+      modal.removeEventListener('click', onBackdrop);
+      resolve(result);
+    }
+    function onOk(){ cleanup(true); }
+    function onCancel(){ cleanup(false); }
+    function onBackdrop(e){ if(e.target === modal) cleanup(false); }
+    okBtn.addEventListener('click', onOk);
+    cancelBtn.addEventListener('click', onCancel);
+    modal.addEventListener('click', onBackdrop);
+    modal.classList.add('show');
+  });
+}
+
+function startListening(){
+  if(unsubscribeSnapshot) return;
+  unsubscribeSnapshot = onValue(dataRef, (snap)=>{
+    if(isRemoteUpdate){
+      // this update is just confirming our own write; skip re-render to avoid flicker
+      isRemoteUpdate = false;
+      return;
+    }
+    const data = snap.exists() ? snap.val() : { list: [] };
+    employees = (data.list || []).map(emp => ({
+      ...emp,
+      accounts: Array.isArray(emp.accounts) ? emp.accounts : [],
+      reminders: Array.isArray(emp.reminders) ? emp.reminders : []
+    }));
+    render();
+  }, (err)=>{
+    console.error('Realtime Database listen failed:', err);
+    showToast('تعذر تحميل البيانات');
+  });
+}
+
+// startListening()/startListeningActivity() are now called from
+// grantAccessAndBoot() above, once we've confirmed the logged-in user
+// is allowed into this system and know which workspace to read from.
+
+function uid(){ return Date.now().toString(36) + Math.random().toString(36).slice(2,7); }
+
+function showToast(msg){
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  clearTimeout(t._timer);
+  t._timer = setTimeout(()=> t.classList.remove('show'), 1600);
+}
+
+function initials(name){
+  const parts = name.trim().split(/\s+/);
+  return parts.slice(0,2).map(p=>p[0]).join('').toUpperCase();
+}
+
+// ---- Timing tracking ----
+function formatDuration(ms){
+  if(ms < 0) ms = 0;
+  const mins = Math.floor(ms / 60000);
+  if(mins < 60) return `${mins}د`;
+  const hrs = Math.floor(mins / 60);
+  const rem = mins % 60;
+  return `${hrs}س ${rem}د`;
+}
+function formatClock(ts){
+  const d = new Date(ts);
+  return d.toLocaleString('ar', { hour:'2-digit', minute:'2-digit', day:'2-digit', month:'2-digit' });
+}
+
+function computeAvgCompletionMs(){
+  let total=0, count=0;
+  employees.forEach(e => e.accounts.forEach(a=>{
+    if(a.checked && a.checkedAt && a.createdAt){
+      total += (a.checkedAt - a.createdAt);
+      count++;
+    }
+  }));
+  return count ? total/count : null;
+}
+
+function render(){
+  const listEl = document.getElementById('employeeList');
+  const emptyEl = document.getElementById('emptyState');
+  const query = document.getElementById('searchBox').value.trim().toLowerCase();
+
+  const filtered = employees.filter(e => e.name.toLowerCase().includes(query));
+
+  if(employees.length === 0){
+    emptyEl.style.display = 'block';
+    listEl.innerHTML = '';
+  } else {
+    emptyEl.style.display = 'none';
+    listEl.innerHTML = filtered.map(emp => renderEmployee(emp)).join('');
+  }
+
+  // stats
+  let total=0, done=0;
+  employees.forEach(e => e.accounts.forEach(a => { total++; if(a.checked) done++; }));
+  document.getElementById('statTotal').textContent = total;
+  document.getElementById('statDone').textContent = done;
+  document.getElementById('statPending').textContent = total - done;
+
+  const avgMs = computeAvgCompletionMs();
+  document.getElementById('statAvg').textContent = avgMs === null ? '—' : formatDuration(avgMs);
+
+  updateAlertBanner();
+  attachEvents();
+}
+
+function updateAlertBanner(){
+  const banner = document.getElementById('alertBanner');
+  const pendingByEmp = employees
+    .map(e => ({ name: e.name, count: e.accounts.filter(a=>!a.checked).length }))
+    .filter(e => e.count > 0);
+
+  const totalPending = pendingByEmp.reduce((s,e)=>s+e.count, 0);
+
+  if(totalPending === 0){
+    banner.classList.remove('show');
+    return;
+  }
+
+  document.getElementById('alertHeadline').textContent =
+    `يوجد ${totalPending} حساب لم يتم فحصه بعد`;
+  document.getElementById('alertDetail').textContent =
+    pendingByEmp.map(e => `${e.name} (${e.count})`).join(' · ');
+  banner.classList.add('show');
+}
+
+function renderEmployee(emp){
+  if(!Array.isArray(emp.accounts)) emp.accounts = [];
+  if(!Array.isArray(emp.reminders)) emp.reminders = [];
+  const isOpen = !!openState[emp.id];
+  const total = emp.accounts.length;
+  const done = emp.accounts.filter(a=>a.checked).length;
+  const pct = total ? Math.round((done/total)*100) : 0;
+
+  const now = Date.now();
+
+  const accountsHtml = emp.accounts.length ? emp.accounts.map(acc => {
+    const created = acc.createdAt || null;
+    let timingHtml = '';
+    if(acc.checked){
+      if(acc.checkedAt && created){
+        timingHtml = `<span class="time-badge" title="وقت الإنجاز">⏱ ${formatDuration(acc.checkedAt - created)}</span>`;
+      }
+    } else if(created){
+      timingHtml = `<span class="time-badge" title="منذ الإضافة">⏳ ${formatDuration(now - created)}</span>`;
+    }
+    return `
+    <div class="account-row ${acc.checked?'checked':''}" data-emp="${emp.id}" data-acc="${acc.id}">
+      <div class="cred">
+        <span class="label">اسم المستخدم</span>
+        <span class="val">${escapeHtml(acc.username)}</span>
+        <button class="copy-btn" data-copy="${escapeAttr(acc.username)}">نسخ</button>
+      </div>
+      <div class="cred">
+        <span class="label">كلمة المرور</span>
+        <span class="val">${escapeHtml(acc.password)}</span>
+        <button class="copy-btn" data-copy="${escapeAttr(acc.password)}">نسخ</button>
+      </div>
+      ${timingHtml}
+      <button class="toggle-status ${acc.checked?'done':''}" data-emp="${emp.id}" data-acc="${acc.id}" data-action="toggle">
+        <span class="dot"></span> ${acc.checked ? 'تم الفحص' : 'لم يُفحص'}
+      </button>
+      ${myAccessLevel === 'edit' ? `<button class="del-account" data-emp="${emp.id}" data-acc="${acc.id}" data-action="delAccount" title="حذف الحساب">✕</button>` : ''}
+    </div>
+  `;
+  }).join('') : `<div class="empty-accounts">لا توجد حسابات لهذا العميل بعد</div>`;
+
+  const reminders = (emp.reminders || []).slice(-3).reverse();
+  const remindersHtml = reminders.length ? `
+    <div class="reminders-box">
+      ${reminders.map(r => `<div class="reminder-line">🔔 <span>${escapeHtml(r.msg)}</span> <span class="time-badge">${formatClock(r.at)}</span></div>`).join('')}
+    </div>` : '';
+
+  return `
+    <div class="employee ${isOpen?'open':''}" data-emp="${emp.id}">
+      <div class="employee-head" data-action="toggleEmployee" data-emp="${emp.id}">
+        <div class="employee-name">
+          <div class="avatar">${initials(emp.name)}</div>
+          <span>${escapeHtml(emp.name)}</span>
+        </div>
+        <div class="progress-mini">
+          <div class="bar"><div class="bar-fill" style="width:${pct}%"></div></div>
+          <span>${done}/${total}</span>
+          <span class="chevron">▾</span>
+        </div>
+        <div class="head-actions">
+          ${myAccessLevel === 'edit' ? `
+          <button class="icon-btn" data-action="sendReminder" data-emp="${emp.id}" title="إرسال تنبيه بخصوص العميل">🔔</button>
+          <button class="icon-btn" data-action="deleteEmployee" data-emp="${emp.id}" title="حذف العميل">🗑</button>
+          ` : ''}
+        </div>
+      </div>
+      <div class="accounts">
+        ${remindersHtml}
+        ${accountsHtml}
+        ${myAccessLevel === 'edit' ? `
+        <div class="add-account-row">
+          <input type="text" placeholder="اسم المستخدم" class="newUsername" data-emp="${emp.id}">
+          <input type="text" placeholder="كلمة المرور" class="newPassword" data-emp="${emp.id}">
+          <button class="btn primary" data-action="addAccount" data-emp="${emp.id}">+ إضافة حساب</button>
+        </div>
+        ` : ''}
+      </div>
+    </div>
+  `;
+}
+
+function escapeHtml(str){
+  return String(str).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+function escapeAttr(str){
+  return String(str).replace(/"/g,'&quot;');
+}
+
+function attachEvents(){
+  document.querySelectorAll('[data-action="toggleEmployee"]').forEach(el=>{
+    el.addEventListener('click', (e)=>{
+      if(e.target.closest('.icon-btn')) return;
+      const id = el.dataset.emp;
+      openState[id] = !openState[id];
+      render();
+    });
+  });
+
+  document.querySelectorAll('[data-action="sendReminder"]').forEach(el=>{
+    el.addEventListener('click', (e)=>{
+      e.stopPropagation();
+      if(myAccessLevel !== 'edit'){ showToast('🚫 لا تملك صلاحية إرسال التنبيهات'); return; }
+      const id = el.dataset.emp;
+      const emp = employees.find(x=>x.id===id);
+      const pending = emp.accounts.filter(a=>!a.checked).length;
+      const defaultMsg = pending > 0
+        ? `الرجاء الإسراع في إنجاز الحسابات المتبقية (${pending} حساب لم يُفحص بعد)`
+        : 'الرجاء تسريع وتيرة العمل';
+      const msg = prompt('نص التنبيه:', defaultMsg);
+      if(msg === null) return; // cancelled
+      if(!emp.reminders) emp.reminders = [];
+      emp.reminders.push({ id: uid(), msg: msg.trim() || defaultMsg, at: Date.now() });
+      saveData(employees);
+      render();
+      showToast('تم إرسال التنبيه لـ ' + emp.name);
+    });
+  });
+
+  document.querySelectorAll('[data-action="deleteEmployee"]').forEach(el=>{
+    el.addEventListener('click', async (e)=>{
+      e.stopPropagation();
+      if(myAccessLevel !== 'edit'){ showToast('🚫 لا تملك صلاحية حذف العملاء'); return; }
+      const id = el.dataset.emp;
+      const emp = employees.find(x=>x.id===id);
+      const ok = await confirmDialog(`هل تريد حذف "${emp.name}" وكل حساباته؟ لا يمكن التراجع عن هذا الإجراء.`, 'حذف عميل');
+      if(ok){
+        employees = employees.filter(x=>x.id!==id);
+        saveData(employees);
+        render();
+        showToast('تم حذف العميل');
+        logActivity(`تم حذف العميل "${emp.name}" (${emp.accounts?.length || 0} حساب)`);
+      }
+    });
+  });
+
+  document.querySelectorAll('[data-action="toggle"]').forEach(el=>{
+    el.addEventListener('click', ()=>{
+      const empId = el.dataset.emp, accId = el.dataset.acc;
+      const emp = employees.find(x=>x.id===empId);
+      const acc = emp.accounts.find(x=>x.id===accId);
+      acc.checked = !acc.checked;
+      acc.checkedAt = acc.checked ? Date.now() : null;
+      if(!acc.createdAt) acc.createdAt = Date.now(); // backfill for older records
+      saveData(employees);
+      render();
+      logActivity(`${acc.checked ? 'تم فحص' : 'إلغاء فحص'} حساب "${acc.username}" لدى "${emp.name}"`);
+    });
+  });
+
+  document.querySelectorAll('[data-action="delAccount"]').forEach(el=>{
+    el.addEventListener('click', async ()=>{
+      if(myAccessLevel !== 'edit'){ showToast('🚫 لا تملك صلاحية حذف الحسابات'); return; }
+      const empId = el.dataset.emp, accId = el.dataset.acc;
+      const emp = employees.find(x=>x.id===empId);
+      const acc = emp.accounts.find(x=>x.id===accId);
+      const ok = await confirmDialog(`هل تريد حذف الحساب "${acc?.username || ''}"؟`, 'حذف حساب');
+      if(!ok) return;
+      emp.accounts = emp.accounts.filter(x=>x.id!==accId);
+      saveData(employees);
+      render();
+      showToast('تم حذف الحساب');
+      logActivity(`تم حذف حساب "${acc?.username || ''}" من "${emp.name}"`);
+    });
+  });
+
+  document.querySelectorAll('.copy-btn').forEach(el=>{
+    el.addEventListener('click', async ()=>{
+      const text = el.dataset.copy;
+      try{
+        await navigator.clipboard.writeText(text);
+      }catch(e){
+        const ta = document.createElement('textarea');
+        ta.value = text; document.body.appendChild(ta); ta.select();
+        document.execCommand('copy'); document.body.removeChild(ta);
+      }
+      const original = el.textContent;
+      el.textContent = 'تم!';
+      el.classList.add('copied');
+      setTimeout(()=>{ el.textContent = original; el.classList.remove('copied'); }, 1200);
+    });
+  });
+
+  document.querySelectorAll('[data-action="addAccount"]').forEach(el=>{
+    el.addEventListener('click', ()=>{
+      if(myAccessLevel !== 'edit'){ showToast('🚫 لا تملك صلاحية إضافة الحسابات'); return; }
+      const empId = el.dataset.emp;
+      const uInput = document.querySelector(`.newUsername[data-emp="${empId}"]`);
+      const pInput = document.querySelector(`.newPassword[data-emp="${empId}"]`);
+      const username = uInput.value.trim();
+      const password = pInput.value.trim();
+      if(!username || !password){
+        showToast('أدخل اسم المستخدم وكلمة المرور');
+        return;
+      }
+      const emp = employees.find(x=>x.id===empId);
+      emp.accounts.push({ id: uid(), username, password, checked:false, createdAt: Date.now(), checkedAt: null });
+      saveData(employees);
+      openState[empId] = true;
+      render();
+      showToast('تمت إضافة الحساب');
+      logActivity(`تمت إضافة حساب "${username}" إلى "${emp.name}"`);
+    });
+  });
+
+  // allow Enter key to submit account
+  document.querySelectorAll('.newUsername, .newPassword').forEach(inp=>{
+    inp.addEventListener('keydown', (e)=>{
+      if(e.key === 'Enter'){
+        const empId = inp.dataset.emp;
+        document.querySelector(`[data-action="addAccount"][data-emp="${empId}"]`).click();
+      }
+    });
+  });
+}
+
+// Add employee modal
+const modal = document.getElementById('employeeModal');
+document.getElementById('addEmployeeBtn').addEventListener('click', ()=>{
+  modal.classList.add('show');
+  document.getElementById('newEmployeeName').value = '';
+  document.getElementById('newEmployeeName').focus();
+});
+document.getElementById('cancelEmployee').addEventListener('click', ()=>{
+  modal.classList.remove('show');
+});
+modal.addEventListener('click', (e)=>{ if(e.target === modal) modal.classList.remove('show'); });
+
+document.getElementById('confirmEmployee').addEventListener('click', addEmployee);
+document.getElementById('newEmployeeName').addEventListener('keydown', (e)=>{
+  if(e.key === 'Enter') addEmployee();
+});
+
+function addEmployee(){
+  if(myAccessLevel !== 'edit'){ showToast('🚫 لا تملك صلاحية إضافة عملاء'); return; }
+  const name = document.getElementById('newEmployeeName').value.trim();
+  if(!name){ showToast('أدخل اسم العميل'); return; }
+  employees.push({ id: uid(), name, accounts: [], reminders: [] });
+  saveData(employees);
+  modal.classList.remove('show');
+  render();
+  showToast('تمت إضافة العميل');
+  logActivity(`تمت إضافة عميل جديد "${name}"`);
+}
+
+document.getElementById('searchBox').addEventListener('input', render);
+
+// Re-render periodically so "pending since" timers stay current
+// even if nobody touches the page.
+setInterval(()=>{ if(employees.length) render(); }, 30000);
+
+document.getElementById('expandAllBtn').addEventListener('click', ()=>{
+  employees.forEach(e => openState[e.id] = true);
+  render();
+});
+document.getElementById('collapseAllBtn').addEventListener('click', ()=>{
+  openState = {};
+  render();
+});
+
+document.getElementById('resetDayBtn').addEventListener('click', async ()=>{
+  if(myAccessLevel !== 'edit'){ showToast('🚫 لا تملك صلاحية بدء يوم جديد'); return; }
+  if(!employees.length){ showToast('لا يوجد عملاء بعد'); return; }
+  const totalAccounts = employees.reduce((n, e) => n + e.accounts.length, 0);
+  const checkedAccounts = employees.reduce((n, e) => n + e.accounts.filter(a => a.checked).length, 0);
+  const ok = await confirmDialog(
+    `سيتم إعادة تعيين حالة الفحص لكل الحسابات (${checkedAccounts} من ${totalAccounts} حساب مفحوص حالياً) إلى "لم يُفحص" لبدء يوم متابعة جديد. لا يمكن التراجع عن هذا الإجراء.`,
+    'بدء يوم جديد — إعادة تعيين الفحص'
+  );
+  if(!ok) return;
+  const updated = employees.map(e => ({
+    ...e,
+    accounts: e.accounts.map(a => ({ ...a, checked: false, checkedAt: null }))
+  }));
+  employees = updated;
+  saveData(updated);
+  render();
+  showToast('تمت إعادة تعيين جميع الحسابات ليوم جديد');
+  logActivity(`تمت إعادة تعيين حالة الفحص لجميع الحسابات (${totalAccounts} حساب) لبدء يوم جديد`);
+});
+
+const activityModal = document.getElementById('activityModal');
+document.getElementById('activityLogBtn').addEventListener('click', ()=>{
+  renderActivity();
+  activityModal.classList.add('show');
+});
+document.getElementById('closeActivityModal').addEventListener('click', ()=>{
+  activityModal.classList.remove('show');
+});
+activityModal.addEventListener('click', (e)=>{ if(e.target === activityModal) activityModal.classList.remove('show'); });
+</script>
+</body>
+</html>
