@@ -1,0 +1,1497 @@
+<!DOCTYPE html>
+<html dir="rtl" lang="ar">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>لوحة تحكم المشرف — Prime-Plus</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800;900&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-database-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-auth-compat.js"></script>
+<script>
+  const firebaseConfig = {
+    apiKey: "AIzaSyA1q9LiS6EXNCBFmFvytyN-p4KKgP9wym4",
+    authDomain: "prime-e-8eb80.firebaseapp.com",
+    databaseURL: "https://prime-e-8eb80-default-rtdb.firebaseio.com",
+    projectId: "prime-e-8eb80",
+    storageBucket: "prime-e-8eb80.firebasestorage.app",
+    messagingSenderId: "671376930301",
+    appId: "1:671376930301:web:f8b61666314f3149fb5594"
+  };
+  firebase.initializeApp(firebaseConfig);
+  const fbDB = firebase.database();
+  const fbAuth = firebase.auth();
+  // Secondary Firebase Auth app — used only for creating new staff Auth
+  // accounts / changing their passwords without signing the current admin
+  // out of their own session (same trick used in index.html).
+  const secondaryApp = firebase.initializeApp(firebaseConfig, 'secondaryAccountCreator');
+  const secondaryAuth = secondaryApp.auth();
+  // Used by sendPushNotification/sendPushToUser to relay pushes through the
+  // Cloudflare Worker that holds the private Firebase service-account creds.
+  const ANNOUNCEMENT_WORKER_URL = "https://tiny-violet-734e.ahmedallraqe287.workers.dev";
+</script>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html { scroll-behavior: smooth; }
+body {
+  font-family: 'Tajawal', 'Segoe UI', Tahoma, Arial, sans-serif;
+  background: #f3f6fa; color: #1e293b; direction: rtl; font-size: 14.5px; line-height: 1.65;
+}
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 20px; border: 2px solid transparent; background-clip: content-box; }
+.tab { padding: 9px 16px; border: 1.5px solid #e2e8f0; background: #fff; border-radius: 9px; cursor: pointer; font-family: inherit; font-weight: 700; color: #475569; }
+.tab.active { background: #16283d; color: #fff; border-color: #16283d; }
+.sec-hd { font-weight: 800; color: #10203a; padding: 8px 0; border-bottom: 2px solid #e2e8f0; margin-bottom: 14px; }
+.tbl-wrap { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; }
+th, td { padding: 8px 10px; border-bottom: 1px solid #e2e8f0; text-align: right; font-size: 0.85rem; }
+th { background: #f8fafc; font-weight: 700; color: #475569; }
+.name-cell { font-weight: 700; }
+.ov-card { background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 16px; text-align: center; }
+.ov-card-title { font-size: 0.8rem; color: #64748b; font-weight: 700; margin-bottom: 6px; }
+.ov-card-num { font-size: 1.8rem; font-weight: 900; color: #10203a; }
+.ov-card-sub { font-size: 0.72rem; color: #94a3b8; margin-top: 4px; }
+.ov-btn { padding: 11px 20px; border: none; border-radius: 9px; font-family: inherit; font-weight: 700; cursor: pointer; background: #e2e8f0; color: #10203a; width: 100%; }
+.ov-btn-primary { background: #16283d; color: #fff; }
+</style>
+</head>
+<body>
+
+<!-- ══════════════════════════════════════════════════════════ -->
+<!--  Shown until Firebase confirms this account may open the    -->
+<!--  admin dashboard (isAdmin, or systems.admin === 'edit')      -->
+<!-- ══════════════════════════════════════════════════════════ -->
+<div id="roleNotice" style="padding:40px;text-align:center;color:#64748b;font-size:0.95rem">جارِ التحقق من صلاحياتك...</div>
+
+<div id="adminRoot" style="display:none">
+  <div style="display:flex;gap:6px;flex-wrap:wrap;padding:14px 18px 0;background:#f3f6fa" dir="rtl">
+    <button class="tab admin-sub active" id="adminSubBtn-overview" onclick="showAdminSection('overview', this)" style="width:auto;font-size:0.85rem;padding:9px 16px;border-radius:9px">نظرة عامة على النظام</button>
+    <button class="tab admin-sub" id="adminSubBtn-accounts" onclick="showAdminSection('accounts', this)" style="width:auto;font-size:0.85rem;padding:9px 16px;border-radius:9px">الحسابات (إنشاء وإدارة)</button>
+    <button class="tab admin-sub" id="adminSubBtn-requests" onclick="showAdminSection('requests', this)" style="width:auto;font-size:0.85rem;padding:9px 16px;border-radius:9px">طلبات الموظفين وسجلها</button>
+    <button class="tab admin-sub" id="adminSubBtn-merge" onclick="showAdminSection('merge', this)" style="width:auto;font-size:0.85rem;padding:9px 16px;border-radius:9px">دمج الأسماء</button>
+    <button class="tab admin-sub" id="adminSubBtn-announcements" onclick="showAdminSection('announcements', this)" style="width:auto;font-size:0.85rem;padding:9px 16px;border-radius:9px">التبليغات</button>
+  </div>
+  <div style="padding:18px" dir="rtl">
+    <!-- ── ADMIN DASHBOARD TAB ── -->
+    <div id="tab-admin">
+      <div class="sec-hd">
+        <span>لوحة تحكم المشرف — إدارة الحسابات والصلاحيات</span>
+      </div>
+
+      <!-- ═══ Section: System overview (dashboard home) ═══ -->
+      <div class="admin-section" data-sec="overview">
+        <div class="sec-hd" style="margin-top:8px"><span>نظرة عامة على النظام</span></div>
+
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:16px;margin-bottom:22px" dir="rtl">
+
+          <div class="ov-card">
+            <div class="ov-card-title">المشرفون</div>
+            <div class="ov-card-num" id="ovAdminsCount">—</div>
+            <div class="ov-card-sub">أصحاب الصلاحيات الكاملة</div>
+          </div>
+
+          <div class="ov-card">
+            <div class="ov-card-title">الحسابات</div>
+            <div class="ov-card-num" id="ovAccountsCount">—</div>
+            <div class="ov-card-sub">كل الحسابات داخل مساحة العمل</div>
+          </div>
+
+          <div class="ov-card">
+            <div class="ov-card-title">سجل التغييرات</div>
+            <div class="ov-card-num" id="ovActivityCount">—</div>
+            <div class="ov-card-sub">آخر الأحداث المسجّلة</div>
+          </div>
+
+          <div class="ov-card">
+            <div class="ov-card-title">التقارير اليومية</div>
+            <div class="ov-card-num" id="ovReportsCount">—</div>
+            <div class="ov-card-sub">الأيام المحفوظة في السحابة</div>
+          </div>
+
+          <div class="ov-card">
+            <div class="ov-card-title">آخر نسخة احتياطية</div>
+            <div class="ov-card-num" id="ovLastBackup" style="font-size:1.15rem">—</div>
+            <div class="ov-card-sub">النسخة الأحدث المحفوظة</div>
+          </div>
+
+          <div class="ov-card">
+            <div class="ov-card-title">الطلبات المعلّقة</div>
+            <div class="ov-card-num" id="ovPendingCount">—</div>
+            <div class="ov-card-sub">طلبات الإجازة/الزمنية بانتظار القرار</div>
+          </div>
+
+        </div>
+
+        <div style="display:flex;flex-direction:column;align-items:center;gap:12px;max-width:520px;margin:0 auto">
+          <button class="ov-btn ov-btn-primary" onclick="createBackupNow()" id="ovBackupBtn">إنشاء نسخة احتياطية الآن</button>
+          <button class="ov-btn" onclick="downloadBackupJSON()">تنزيل نسخة محلية JSON</button>
+          <div style="display:flex;gap:12px;width:100%">
+            <button class="ov-btn" style="flex:1" onclick="refreshOverviewStats()">تحديث الإحصاءات</button>
+            <button class="ov-btn" style="flex:1" onclick="openActivityLogScreen()">فتح سجل التغييرات</button>
+          </div>
+          <div id="ovStatus" style="font-size:0.85rem;font-weight:700;min-height:20px;text-align:center"></div>
+        </div>
+      </div><!-- /adminSection overview -->
+
+      <!-- ═══ Section: Accounts (create + manage existing) ═══ -->
+      <div class="admin-section" data-sec="accounts" style="display:none">
+
+      <!-- Create account form -->
+      <div style="background:#f8fafc;border-radius:12px;padding:20px;margin-bottom:24px;border:1px solid #e2e8f0">
+        <h3 style="font-size:0.9rem;color:#10203a;font-weight:700;margin-bottom:14px">إنشاء حساب جديد</h3>
+        <p style="font-size:0.8rem;color:#64748b;margin-bottom:14px">كل حساب يُمنح صلاحية كل نظام على حدة. اختر لكل نظام: بدون وصول / عرض / تعديل — فقط الأنظمة التي تختارها ستظهر لهذا الحساب عند دخوله.</p>
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px;margin-bottom:14px">
+          <div>
+            <label style="display:block;font-size:0.85rem;color:#475569;font-weight:600;margin-bottom:6px">رقم الهاتف</label>
+            <input type="tel" id="newAcctEmail" dir="ltr" inputmode="numeric" placeholder="مثال: 07701234567" style="width:100%;padding:8px;border:1.5px solid #e2e8f0;border-radius:8px;font-family:inherit">
+          </div>
+          <div>
+            <label style="display:block;font-size:0.85rem;color:#475569;font-weight:600;margin-bottom:6px">كلمة المرور المبدئية</label>
+            <input type="text" id="newAcctPassword" dir="ltr" placeholder="6 أحرف على الأقل" style="width:100%;padding:8px;border:1.5px solid #e2e8f0;border-radius:8px;font-family:inherit">
+          </div>
+          <div>
+            <label style="display:block;font-size:0.85rem;color:#475569;font-weight:600;margin-bottom:6px">اسم العرض</label>
+            <input type="text" id="newAcctName" style="width:100%;padding:8px;border:1.5px solid #e2e8f0;border-radius:8px;font-family:inherit">
+          </div>
+          <div style="display:flex;align-items:flex-end;gap:8px">
+            <label style="display:flex;align-items:center;gap:6px;font-size:0.9rem;color:#475569;font-weight:600;cursor:pointer">
+              <input type="checkbox" id="newAcctIsAdmin" onchange="toggleAccountTypeUI('newAcctIsAdmin')" style="width:18px;height:18px"> مشرف كامل الصلاحيات (يرى كل الأنظمة تلقائيًا)
+            </label>
+          </div>
+        </div>
+
+        <div id="newAcctSelfServiceBox" style="display:flex;align-items:center;gap:10px;margin-bottom:14px;background:#fff;border:1px solid #e2e8f0;border-radius:8px;padding:12px 16px;flex-wrap:wrap">
+          <label style="display:flex;align-items:center;gap:6px;font-size:0.9rem;color:#475569;font-weight:600;cursor:pointer">
+            <input type="checkbox" id="newAcctSelfService" onchange="toggleAccountTypeUI('newAcctSelfService')" style="width:18px;height:18px"> بوابة ذاتية فقط (الحساب يرى سجله الشخصي فقط، بدون أي نظام آخر)
+          </label>
+          <div id="newAcctEmployeeFields" style="display:none;flex:1;min-width:200px">
+            <select id="newAcctEmployeeName" style="width:100%;padding:8px;border:1.5px solid #e2e8f0;border-radius:8px;font-family:inherit"></select>
+          </div>
+        </div>
+
+        <div id="newAcctSystemsGrid" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px;margin-bottom:16px">
+          <div style="background:#fff;border:1px solid #e2e8f0;border-radius:8px;padding:12px 16px">
+            <label style="display:block;font-size:0.85rem;color:#475569;font-weight:700;margin-bottom:6px">نظام قسم المتابعة</label>
+            <select id="newAcctSysMatabaa" style="width:100%;padding:7px 8px;border:1.5px solid #e2e8f0;border-radius:6px;font-family:inherit;font-size:0.85rem">
+              <option value="none">لا يوجد وصول</option>
+              <option value="view">عرض فقط</option>
+              <option value="edit">عرض وتعديل</option>
+            </select>
+          </div>
+          <div style="background:#fff;border:1px solid #e2e8f0;border-radius:8px;padding:12px 16px">
+            <label style="display:block;font-size:0.85rem;color:#475569;font-weight:700;margin-bottom:6px">نظام إجازات الموظفين (الكونسول الكامل)</label>
+            <select id="newAcctSysHR" style="width:100%;padding:7px 8px;border:1.5px solid #e2e8f0;border-radius:6px;font-family:inherit;font-size:0.85rem">
+              <option value="none">لا يوجد وصول</option>
+              <option value="full">إدارة كاملة (كل الموظفين وكل الأقسام)</option>
+            </select>
+          </div>
+          <div style="background:#fff;border:1px solid #e2e8f0;border-radius:8px;padding:12px 16px">
+            <label style="display:block;font-size:0.85rem;color:#475569;font-weight:700;margin-bottom:6px">بوابة المدير</label>
+            <select id="newAcctSysManager" style="width:100%;padding:7px 8px;border:1.5px solid #e2e8f0;border-radius:6px;font-family:inherit;font-size:0.85rem">
+              <option value="none">لا يوجد وصول</option>
+              <option value="view">عرض يومي فقط</option>
+              <option value="approve">عرض ويوافق على الطلبات</option>
+            </select>
+          </div>
+          <div style="background:#fff;border:1px solid #e2e8f0;border-radius:8px;padding:12px 16px">
+            <label style="display:block;font-size:0.85rem;color:#475569;font-weight:700;margin-bottom:6px">متابعة حسابات العملاء</label>
+            <select id="newAcctSysAccounts" style="width:100%;padding:7px 8px;border:1.5px solid #e2e8f0;border-radius:6px;font-family:inherit;font-size:0.85rem">
+              <option value="none">لا يوجد وصول</option>
+              <option value="view">فحص ومعالجة فقط</option>
+              <option value="edit">صلاحية كاملة</option>
+            </select>
+          </div>
+          <div style="background:#fff;border:1px solid #e2e8f0;border-radius:8px;padding:12px 16px">
+            <label style="display:block;font-size:0.85rem;color:#475569;font-weight:700;margin-bottom:6px">لوحة تحكم المشرف</label>
+            <select id="newAcctSysAdmin" style="width:100%;padding:7px 8px;border:1.5px solid #e2e8f0;border-radius:6px;font-family:inherit;font-size:0.85rem">
+              <option value="none">لا يوجد وصول</option>
+              <option value="edit">صلاحية كاملة (إنشاء وإدارة حسابات أخرى)</option>
+            </select>
+          </div>
+        </div>
+        <button onclick="createStaffAccount()" style="background:#16a34a;color:#fff;border:none;padding:10px 26px;border-radius:8px;cursor:pointer;font-weight:700;font-family:inherit">إنشاء الحساب</button>
+        <span id="newAcctStatus" style="margin-inline-start:12px;font-size:0.85rem;font-weight:600"></span>
+      </div>
+
+      </div><!-- /adminSection-accounts -->
+
+      <!-- ═══ Section: Employee requests + history ═══ -->
+      <div class="admin-section" data-sec="requests" style="display:none">
+
+      <!-- Pending employee requests -->
+      <div class="sec-hd" style="margin-top:8px"><span>طلبات الموظفين الجديدة</span></div>
+      <div id="employeeRequestsList" style="margin-bottom:24px">
+        <div style="text-align:center;color:#94a3b8;padding:16px;font-size:0.85rem">جارِ التحميل...</div>
+      </div>
+
+      <!-- Decided (approved/declined) employee requests — admin can delete any of these -->
+      <div class="sec-hd" style="margin-top:8px"><span>سجل طلبات الموظفين (المقبولة والمرفوضة)</span></div>
+      <div id="employeeRequestsHistoryList" style="margin-bottom:24px">
+        <div style="text-align:center;color:#94a3b8;padding:16px;font-size:0.85rem">جارِ التحميل...</div>
+      </div>
+
+      </div><!-- /adminSection requests -->
+
+      <!-- ═══ Section: Merge duplicate names ═══ -->
+      <div class="admin-section" data-sec="merge" style="display:none">
+
+      <!-- Merge duplicate employee names (e.g. a trainee's name changed after training,
+           or the same person was typed slightly differently in different places) -->
+      <div class="sec-hd" style="margin-top:8px"><span>دمج أسماء موظف مكرر (نفس الشخص باسمين)</span></div>
+      <div style="background:#f8fafc;border-radius:12px;padding:20px;margin-bottom:24px;border:1px solid #e2e8f0">
+        <p style="font-size:0.82rem;color:#64748b;margin-bottom:14px">
+          لو نفس الموظف مسجّل بأكثر من اسم (مثلاً كان "اسمه تدريب" وبعدها صار اسمه الحقيقي، أو انكتب اسمه بطريقتين مختلفتين)، هذي الأداة تدمج كل سجلاته (الحضور، الاجازات، أيام العمل) تحت اسم واحد صحيح.
+        </p>
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px;margin-bottom:14px">
+          <div>
+            <label style="display:block;font-size:0.85rem;color:#475569;font-weight:600;margin-bottom:6px">الاسم القديم/المكرر (انسخه بالضبط كما يظهر)</label>
+            <input type="text" id="mergeOldName" style="width:100%;padding:8px;border:1.5px solid #e2e8f0;border-radius:8px;font-family:inherit">
+          </div>
+          <div>
+            <label style="display:block;font-size:0.85rem;color:#475569;font-weight:600;margin-bottom:6px">دمجه ضمن الاسم الصحيح</label>
+            <select id="mergeNewName" style="width:100%;padding:8px;border:1.5px solid #e2e8f0;border-radius:8px;font-family:inherit"></select>
+          </div>
+        </div>
+        <button onclick="mergeEmployeeNames()" style="background:#7c3aed;color:#fff;border:none;padding:10px 26px;border-radius:8px;cursor:pointer;font-weight:700;font-family:inherit">دمج الآن</button>
+        <span id="mergeStatus" style="margin-inline-start:12px;font-size:0.85rem;font-weight:600"></span>
+      </div>
+
+      </div><!-- /adminSection merge -->
+
+      <!-- ═══ Section: Announcements (تبليغات للموظفين) ═══ -->
+      <div class="admin-section" data-sec="announcements" style="display:none">
+
+      <div class="sec-hd" style="margin-top:8px"><span>إرسال تبليغ جديد</span></div>
+      <div style="background:#f8fafc;border-radius:12px;padding:20px;margin-bottom:24px;border:1px solid #e2e8f0">
+        <p style="font-size:0.82rem;color:#64748b;margin-bottom:14px">
+          اكتب التبليغ واختر الأقسام التي تريد أن يصلها. سيظهر التبليغ لكل موظف مرتبط بحساب في هذه الأقسام عند دخوله، ويمكنك متابعة من قرأه ومن لم يقرأه بعد.
+        </p>
+        <div style="margin-bottom:14px">
+          <label style="display:block;font-size:0.85rem;color:#475569;font-weight:600;margin-bottom:6px">نص التبليغ</label>
+          <textarea id="annMessage" rows="3" placeholder="اكتب نص التبليغ هنا..." style="width:100%;padding:10px;border:1.5px solid #e2e8f0;border-radius:8px;font-family:inherit;resize:vertical"></textarea>
+        </div>
+        <div style="margin-bottom:14px">
+          <label style="display:block;font-size:0.85rem;color:#475569;font-weight:600;margin-bottom:6px">الأقسام المستهدفة</label>
+          <div id="annDeptOptions" style="display:flex;flex-wrap:wrap;gap:10px;background:#fff;border:1px solid #e2e8f0;border-radius:8px;padding:12px">
+            <div style="color:#94a3b8;font-size:0.82rem">جارِ التحميل...</div>
+          </div>
+        </div>
+        <button onclick="sendAnnouncement()" style="background:#16a34a;color:#fff;border:none;padding:10px 26px;border-radius:8px;cursor:pointer;font-weight:700;font-family:inherit">إرسال التبليغ</button>
+        <span id="annStatus" style="margin-inline-start:12px;font-size:0.85rem;font-weight:600"></span>
+      </div>
+
+      <div class="sec-hd" style="margin-top:8px"><span>سجل التبليغات المرسلة — من قرأها</span></div>
+      <div id="annHistoryList" style="margin-bottom:24px">
+        <div style="text-align:center;color:#94a3b8;padding:16px;font-size:0.85rem">جارِ التحميل...</div>
+      </div>
+
+      </div><!-- /adminSection announcements -->
+
+      <!-- ═══ Section: Accounts (existing accounts table) ═══ -->
+      <div class="admin-section" data-sec="accounts" style="display:none">
+
+      <!-- Existing accounts -->
+      <div class="sec-hd" style="margin-top:8px"><span>الحسابات الحالية</span></div>
+      <div class="tbl-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th style="text-align:right">الهاتف / الاسم</th>
+              <th>الصلاحية</th>
+              <th>الوصول للتبويبات</th>
+              <th style="width:110px">الحالة</th>
+              <th style="width:110px">القسم</th>
+              <th style="width:210px">إجراءات</th>
+            </tr>
+          </thead>
+          <tbody id="membersTableBody">
+            <tr><td colspan="6" style="text-align:center;color:#94a3b8;padding:20px">جارِ التحميل...</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p style="font-size:0.8rem;color:#94a3b8;margin-top:10px">
+        ملاحظة: زر "تعطيل" يمنع الحساب من الدخول فورًا. حذف الحساب نهائيًا من نظام الدخول (Firebase Authentication) يتطلب فتح لوحة تحكم Firebase يدويًا.
+      </p>
+      </div><!-- /adminSection accounts (existing) -->
+    </div>
+
+  </div>
+
+</div>
+
+<script>
+let myWorkspaceOwner = null, isAdmin = false, myDisplayName = '';
+
+// ── Same unified per-system permission helpers used in index.html —
+// kept here too so this file can compute access independently. ──
+function computeMemberSystems(p) {
+  if (p.systems) {
+    return {
+      matabaa: p.systems.matabaa || 'none', hr: p.systems.hr || 'none', manager: p.systems.manager || 'none',
+      accounts: p.systems.accounts || 'none', admin: p.systems.admin || 'none', sales: p.systems.sales || 'none',
+      selfService: !!p.selfService, employeeName: p.employeeName || '', employeeCardId: p.employeeCardId || ''
+    };
+  }
+  if (p.role === 'employee') {
+    return { matabaa: 'none', hr: 'none', manager: 'none', accounts: 'none', admin: 'none', sales: 'none', selfService: true, employeeName: p.employeeName || p.name || '', employeeCardId: p.employeeCardId || '' };
+  }
+  if (p.role === 'manager') {
+    return { matabaa: 'none', hr: 'none', manager: p.canApprove ? 'approve' : 'view', accounts: 'none', admin: 'none', sales: 'none', selfService: false, employeeName: '' };
+  }
+  const tabVals = Object.values(p.tabs || {});
+  const matabaa = tabVals.includes('edit') ? 'edit' : (tabVals.includes('view') ? 'view' : 'none');
+  const accounts = p.accountsAccessLevel || (p.canAccessAccounts ? 'edit' : 'none');
+  const hr = p.canAccessHR ? 'full' : 'none';
+  return { matabaa, hr, manager: 'none', accounts, admin: p.isAdmin ? 'edit' : 'none', sales: p.systems && p.systems.sales || 'none', selfService: false, employeeName: '', employeeCardId: '' };
+}
+
+function systemsRoleLabel(sys, isAdminAcct) {
+  if (isAdminAcct) return 'مشرف';
+  if (sys.selfService) return 'موظف — ' + (sys.employeeName || '');
+  const MGR_LABELS = { view: 'عرض يومي فقط', approve: 'عرض ويوافق على الطلبات' };
+  const parts = [];
+  if (sys.matabaa !== 'none') parts.push('متابعة (' + (sys.matabaa === 'edit' ? 'تعديل' : 'عرض') + ')');
+  if (sys.hr !== 'none') parts.push('إجازات (إدارة كاملة)');
+  if (sys.manager !== 'none') parts.push('بوابة المدير (' + (MGR_LABELS[sys.manager] || sys.manager) + ')');
+  if (sys.accounts !== 'none') parts.push('حسابات (' + (sys.accounts === 'edit' ? 'تعديل' : 'عرض') + ')');
+  if (sys.sales !== 'none') parts.push('المبيعات (' + (sys.sales === 'edit' ? 'تعديل' : 'عرض') + ')');
+  if (sys.admin === 'edit') parts.push('لوحة المشرف');
+  return parts.length ? parts.join(' | ') : 'بدون أي صلاحية نظام بعد';
+}
+
+function canUseAdminDashboard() { return true; } // this file only ever loads for accounts that already passed the check below
+
+function dbPath(p) { return 'users/' + myWorkspaceOwner + '/' + p; }
+// NOTE: unlike index.html, myWorkspaceOwner isn't known until login resolves,
+// so this can't be a const computed once — it's now a getter function used
+// wherever mergeEmployeeNames() previously referenced the old placeholder.
+function currentUserBase() { return 'users/' + myWorkspaceOwner; }
+
+// Minimal local stand-ins for the photo/department caches that live in
+// index.html's متابعة code — refreshEmployeeInfoFromLeaveCards() only reads
+// نظام الإجازات data to detect changes here, it doesn't need to persist
+// them anywhere in this file, so these are just harmless no-op targets.
+let employeePhotosById = {};
+let employeeDeptById = {};
+let employeePhotos = {}; // legacy name-keyed fallback, kept empty here — idnum lookup above covers real usage
+function saveEmployeeListToStorage() {}
+
+function employeeAvatarHTML(name, size, idnum) {
+  size = size || 36;
+  const photo = (idnum && employeePhotosById[idnum]) || employeePhotos[name];
+  const initial = (name || '?').trim().charAt(0);
+  if (photo) {
+    return `<img src="${photo}" style="width:${size}px;height:${size}px;border-radius:50%;object-fit:cover;flex-shrink:0;cursor:pointer;border:1px solid #e1e8f2;">`;
+  }
+  return `<span style="width:${size}px;height:${size}px;border-radius:50%;background:#1c62c9;color:#fff;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:${Math.round(size*0.4)}px;flex-shrink:0;cursor:pointer;">${initial}</span>`;
+}
+
+function getEmployeeDept(name, idnum) {
+  return (idnum && employeeDeptById[idnum]) || '';
+}
+
+function openEmployeeProfileModal(name, idnum) {
+  const dept = getEmployeeDept(name, idnum);
+  const photo = (idnum && employeePhotosById[idnum]) || employeePhotos[name];
+  const initial = (name || '?').trim().charAt(0);
+  const avatarBig = photo
+    ? `<img src="${photo}" style="width:96px;height:96px;border-radius:50%;object-fit:cover;border:3px solid #eaf2fc;">`
+    : `<span style="width:96px;height:96px;border-radius:50%;background:#1c62c9;color:#fff;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:38px;border:3px solid #eaf2fc;">${initial}</span>`;
+
+  const existing = document.getElementById('empProfileModalOverlay');
+  if (existing) existing.remove();
+
+  const overlay = document.createElement('div');
+  overlay.id = 'empProfileModalOverlay';
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(12,26,48,.55);z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px;';
+  overlay.innerHTML = `
+    <div style="background:#fff;border-radius:10px;max-width:320px;width:100%;overflow:hidden;box-shadow:0 20px 50px rgba(12,26,48,.35);">
+      <div style="background:#0c1a30;padding:24px 20px;text-align:center;border-bottom:3px solid #2b8ce8;">
+        ${avatarBig}
+        <div style="color:#fff;font-weight:800;font-size:1.05rem;margin-top:10px;">${escapeHtml(name)}</div>
+        ${dept ? `<div style="color:#9db7dc;font-size:0.82rem;margin-top:2px;">${escapeHtml(dept)}</div>` : ''}
+      </div>
+      <div style="padding:16px 20px;text-align:center;">
+        <button onclick="document.getElementById('empProfileModalOverlay').remove()" style="background:#1c62c9;color:#fff;border:none;padding:9px 24px;border-radius:6px;font-weight:700;cursor:pointer;font-size:0.85rem;">إغلاق</button>
+      </div>
+    </div>`;
+  overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.remove(); });
+  document.body.appendChild(overlay);
+}
+
+function logActivity(action, details) {
+  if (!myWorkspaceOwner) return;
+  fbDB.ref('users/' + myWorkspaceOwner + '/activityLogs').push({
+    action, details: details || '', by: myDisplayName || 'مجهول', ts: Date.now()
+  }).catch(() => {});
+}
+
+function escapeHtml(str) {
+  return String(str == null ? '' : str)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+function sanitize(str) {
+  if (!str) return '';
+  return String(str)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;').replace(/'/g, '&#039;');
+}
+
+const ALL_TAB_IDS = ['morning','evening','perf','schedule','active','leaves'];
+const ZMANYA_MONTHLY_HOURS = 3;
+
+function leaveCardsDbPath() { return 'leaveCardsSystem/' + myWorkspaceOwner + '/employees'; }
+const LEGACY_LEAVE_CARDS_DB_PATH = 'leaveCardsSystem/employees';
+
+function updateLastSavedIndicator() {} // no-op here — index.html owns that indicator
+
+let lastAdminSection = 'overview';
+
+function showAdminSection(name, btnEl) {
+  lastAdminSection = name;
+  renderAdminDashboard();
+
+  document.querySelectorAll('#tab-admin .admin-section').forEach(sec => {
+    sec.style.display = (sec.dataset.sec === name) ? '' : 'none';
+  });
+  document.querySelectorAll('.admin-sub').forEach(b => b.classList.remove('active'));
+  const activeBtn = btnEl || document.getElementById('adminSubBtn-' + name);
+  if (activeBtn) activeBtn.classList.add('active');
+
+  if (name === 'overview') loadOverviewStats();
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  SETTINGS / THEME (Light ↔ Dark, applies to all pages)
+// ═══════════════════════════════════════════════════════════════
+
+
+function renderAdminDashboard() {
+ if (!canUseAdminDashboard()) return;
+ populateNewAcctEmployeeSelect();
+ populateMergeNameSelect();
+ loadPendingEmployeeRequests();
+ renderAnnouncementDeptOptions();
+ renderAnnouncementHistory();
+
+ migrateLegacyMembersForWorkspace().then(renderMembersTable);
+}
+
+function renderMembersTable() {
+ staffMembersRef().once('value').then(snap => {
+ const rows = [];
+ snap.forEach(child => {
+ const uid = child.key;
+ const p = child.val();
+ const sys = computeMemberSystems(p);
+ const roleLabel = systemsRoleLabel(sys, !!p.isAdmin);
+ rows.push(`<tr data-uid="${uid}">
+ <td class="name-cell">${(p.name ? p.name + ' — ' : '') + (p.phone||p.email||'')}</td>
+ <td style="font-size:0.78rem">${p.isAdmin ? 'مشرف' : (sys.selfService ? 'بوابة ذاتية' : roleLabel)}</td>
+ <td style="font-size:0.78rem">${p.isAdmin ? 'كل الأنظمة' : (sys.selfService ? `مرتبط بـ: ${escapeHtml(sys.employeeName)}` : roleLabel)}</td>
+ <td>${p.disabled ? '<span style="color:#dc2626;font-weight:700">معطّل</span>' : '<span style="color:#16a34a;font-weight:700">نشط</span>'}</td>
+ <td><input type="text" value="${escapeHtml(p.department || '')}" placeholder="القسم" onchange="updateMemberDepartment('${uid}', this.value)" style="width:95px;padding:5px 6px;border:1.5px solid #e2e8f0;border-radius:6px;font-family:inherit;font-size:0.78rem"></td>
+ <td>
+ <div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center">
+ ${p.isAdmin || sys.selfService ? '' : `
+ <select onchange="setMemberSystem('${uid}', 'matabaa', this.value)" style="padding:5px 6px;border:1.5px solid #e2e8f0;border-radius:6px;font-family:inherit;font-size:0.74rem;cursor:pointer" title="نظام قسم المتابعة">
+ <option value="none" ${sys.matabaa==='none'?'selected':''}>متابعة: بدون</option>
+ <option value="view" ${sys.matabaa==='view'?'selected':''}>متابعة: عرض</option>
+ <option value="edit" ${sys.matabaa==='edit'?'selected':''}>متابعة: تعديل</option>
+ </select>
+ <select onchange="setMemberSystem('${uid}', 'hr', this.value)" style="padding:5px 6px;border:1.5px solid #e2e8f0;border-radius:6px;font-family:inherit;font-size:0.74rem;cursor:pointer" title="نظام إجازات الموظفين (الكونسول الكامل)">
+ <option value="none" ${sys.hr==='none'?'selected':''}>إجازات: بدون</option>
+ <option value="full" ${sys.hr==='full'?'selected':''}>إجازات: إدارة كاملة</option>
+ </select>
+ <select onchange="setMemberSystem('${uid}', 'manager', this.value)" style="padding:5px 6px;border:1.5px solid #e2e8f0;border-radius:6px;font-family:inherit;font-size:0.74rem;cursor:pointer" title="بوابة المدير">
+ <option value="none" ${sys.manager==='none'?'selected':''}>بوابة المدير: بدون</option>
+ <option value="view" ${sys.manager==='view'?'selected':''}>بوابة المدير: عرض يومي</option>
+ <option value="approve" ${sys.manager==='approve'?'selected':''}>بوابة المدير: يوافق على الطلبات</option>
+ </select>
+ <select onchange="setMemberSystem('${uid}', 'accounts', this.value)" style="padding:5px 6px;border:1.5px solid #e2e8f0;border-radius:6px;font-family:inherit;font-size:0.74rem;cursor:pointer" title="متابعة حسابات العملاء">
+ <option value="none" ${sys.accounts==='none'?'selected':''}>حسابات: بدون</option>
+ <option value="view" ${sys.accounts==='view'?'selected':''}>حسابات: فحص فقط</option>
+ <option value="edit" ${sys.accounts==='edit'?'selected':''}>حسابات: كاملة</option>
+ </select>
+ <select onchange="setMemberSystem('${uid}', 'sales', this.value)" style="padding:5px 6px;border:1.5px solid #e2e8f0;border-radius:6px;font-family:inherit;font-size:0.74rem;cursor:pointer" title="نظام المبيعات (إدارة العملاء)">
+ <option value="none" ${sys.sales==='none'?'selected':''}>المبيعات: بدون</option>
+ <option value="view" ${sys.sales==='view'?'selected':''}>المبيعات: عرض</option>
+ <option value="edit" ${sys.sales==='edit'?'selected':''}>المبيعات: تعديل</option>
+ </select>
+ <select onchange="setMemberSystem('${uid}', 'admin', this.value)" style="padding:5px 6px;border:1.5px solid #e2e8f0;border-radius:6px;font-family:inherit;font-size:0.74rem;cursor:pointer" title="لوحة تحكم المشرف">
+ <option value="none" ${sys.admin==='none'?'selected':''}>لوحة المشرف: بدون</option>
+ <option value="edit" ${sys.admin==='edit'?'selected':''}>لوحة المشرف: كاملة</option>
+ </select>`}
+ <button onclick="toggleMemberDisabled('${uid}', ${!p.disabled})" style="background:${p.disabled?'#16a34a':'#dc2626'};color:#fff;border:none;padding:6px 10px;border-radius:6px;cursor:pointer;font-size:0.78rem;font-weight:700;white-space:nowrap">${p.disabled?'تفعيل':'تعطيل'}</button>
+ <button onclick='changeMemberPassword(${JSON.stringify(uid)}, ${JSON.stringify(p.email || "")}, ${JSON.stringify(p.name || p.phone || "")})' style="background:#2563eb;color:#fff;border:none;padding:6px 10px;border-radius:6px;cursor:pointer;font-size:0.78rem;font-weight:700;white-space:nowrap">كلمة السر</button>
+ <button onclick='deleteMemberAccount(${JSON.stringify(uid)}, ${JSON.stringify(p.name || p.phone || p.email || "")})' style="background:#64748b;color:#fff;border:none;padding:6px 10px;border-radius:6px;cursor:pointer;font-size:0.78rem;font-weight:700;white-space:nowrap">حذف</button>
+ </div>
+ </td>
+ </tr>`);
+ });
+ document.getElementById('membersTableBody').innerHTML = rows.length
+ ? rows.join('')
+ : '<tr><td colspan="6" style="text-align:center;color:#94a3b8;padding:20px">لا يوجد حسابات فرعية بعد</td></tr>';
+ });
+}
+
+// Updates one system's access level for an account and writes it under the
+// new unified `systems` object — this is the single write path for all
+// per-system permission changes now (متابعة / إجازات / حسابات / لوحة المشرف).
+function setMemberSystem(uid, key, value) {
+ staffMemberRef(uid).child('systems/' + key).set(value).then(() => {
+ logActivity('تعديل صلاحية نظام', `${uid} — ${key}: ${value}`);
+ renderAdminDashboard();
+ });
+}
+
+// ═══════════════════════════════════════════════════════════════
+// SYSTEM OVERVIEW DASHBOARD (admin only) — stat cards + backups
+// ═══════════════════════════════════════════════════════════════
+function formatOverviewDate(ts) {
+ if (!ts) return 'لا توجد نسخة بعد';
+ const d = new Date(ts);
+ const dateStr = d.toLocaleDateString('ar-EG-u-nu-latn', { year: 'numeric', month: 'long', day: 'numeric' });
+ const timeStr = d.toLocaleTimeString('ar-EG-u-nu-latn', { hour: '2-digit', minute: '2-digit' });
+ return `${dateStr}، ${timeStr}`;
+}
+
+function loadOverviewStats() {
+ if (!canUseAdminDashboard() || !myWorkspaceOwner) return;
+
+ // Accounts + admins count
+ staffMembersRef().once('value')
+ .then(snap => {
+ let total = 0, admins = 0;
+ snap.forEach(child => {
+ total++;
+ if (child.val() && child.val().isAdmin) admins++;
+ });
+ const accEl = document.getElementById('ovAccountsCount');
+ const admEl = document.getElementById('ovAdminsCount');
+ if (accEl) accEl.textContent = total;
+ if (admEl) admEl.textContent = admins;
+ })
+ .catch(() => {
+ const accEl = document.getElementById('ovAccountsCount');
+ const admEl = document.getElementById('ovAdminsCount');
+ if (accEl) accEl.textContent = '؟';
+ if (admEl) admEl.textContent = '؟';
+ });
+
+ // Activity log count (all entries, not just the last page)
+ fbDB.ref('activityLogs/' + myWorkspaceOwner).once('value')
+ .then(snap => {
+ const el = document.getElementById('ovActivityCount');
+ if (el) el.textContent = snap.numChildren();
+ })
+ .catch(() => { const el = document.getElementById('ovActivityCount'); if (el) el.textContent = '؟'; });
+
+ // Daily reports count
+ fbDB.ref(dbPath('dailyReports')).once('value')
+ .then(snap => {
+ const el = document.getElementById('ovReportsCount');
+ if (el) el.textContent = snap.numChildren();
+ })
+ .catch(() => { const el = document.getElementById('ovReportsCount'); if (el) el.textContent = '؟'; });
+
+ // Pending leave/time requests
+ fbDB.ref('leaveRequests/' + myWorkspaceOwner).once('value')
+ .then(snap => {
+ let pending = 0;
+ snap.forEach(child => {
+ const v = child.val();
+ if (v && (!v.status || v.status === 'pending')) pending++;
+ });
+ const el = document.getElementById('ovPendingCount');
+ if (el) el.textContent = pending;
+ })
+ .catch(() => { const el = document.getElementById('ovPendingCount'); if (el) el.textContent = '؟'; });
+
+ // Last backup timestamp
+ fbDB.ref('backups/' + myWorkspaceOwner + '/meta/lastBackup').once('value')
+ .then(snap => {
+ const el = document.getElementById('ovLastBackup');
+ if (el) el.textContent = formatOverviewDate(snap.val());
+ })
+ .catch(() => { const el = document.getElementById('ovLastBackup'); if (el) el.textContent = '؟'; });
+}
+
+function refreshOverviewStats() {
+ const statusEl = document.getElementById('ovStatus');
+ if (statusEl) { statusEl.style.color = '#2563eb'; statusEl.textContent = 'جارِ تحديث الإحصاءات...'; }
+ loadOverviewStats();
+ setTimeout(() => {
+ if (statusEl) { statusEl.style.color = '#16a34a'; statusEl.textContent = 'تم تحديث الإحصاءات بنجاح.'; }
+ }, 500);
+}
+
+// Gathers a full snapshot of this workspace's data (everything under
+// users/<owner>, plus its members, leave requests, and activity log).
+function gatherWorkspaceSnapshot() {
+ return Promise.all([
+ fbDB.ref('users/' + myWorkspaceOwner).once('value'),
+ staffMembersRef().once('value'),
+ fbDB.ref('leaveRequests/' + myWorkspaceOwner).once('value'),
+ fbDB.ref('activityLogs/' + myWorkspaceOwner).once('value')
+ ]).then(([workspaceSnap, membersSnap, leaveSnap, activitySnap]) => ({
+ exportDate: new Date().toISOString(),
+ workspaceOwner: myWorkspaceOwner,
+ workspaceData: workspaceSnap.val() || {},
+ members: membersSnap.val() || {},
+ leaveRequests: leaveSnap.val() || {},
+ activityLogs: activitySnap.val() || {}
+ }));
+}
+
+let _lastBackupSnapshot = null;
+
+function createBackupNow() {
+ if (!canUseAdminDashboard() || !myWorkspaceOwner) return;
+ const btn = document.getElementById('ovBackupBtn');
+ const statusEl = document.getElementById('ovStatus');
+ if (btn) btn.disabled = true;
+ if (statusEl) { statusEl.style.color = '#2563eb'; statusEl.textContent = 'جارِ إنشاء النسخة الاحتياطية...'; }
+
+ gatherWorkspaceSnapshot().then(payload => {
+ _lastBackupSnapshot = payload;
+ const ts = Date.now();
+ return fbDB.ref('backups/' + myWorkspaceOwner).push({ ts, data: payload })
+ .then(() => fbDB.ref('backups/' + myWorkspaceOwner + '/meta/lastBackup').set(ts));
+ }).then(() => {
+ if (statusEl) { statusEl.style.color = '#16a34a'; statusEl.textContent = 'تم إنشاء نسخة احتياطية بنجاح.'; }
+ logActivity('إنشاء نسخة احتياطية', '');
+ loadOverviewStats();
+ }).catch(err => {
+ console.log('backup failed', err);
+ if (statusEl) { statusEl.style.color = '#dc2626'; statusEl.textContent = 'تعذّر إنشاء النسخة الاحتياطية.'; }
+ }).finally(() => {
+ if (btn) btn.disabled = false;
+ });
+}
+
+function downloadBackupJSON() {
+ if (!canUseAdminDashboard() || !myWorkspaceOwner) return;
+ const statusEl = document.getElementById('ovStatus');
+ if (statusEl) { statusEl.style.color = '#2563eb'; statusEl.textContent = 'جارِ تجهيز الملف...'; }
+
+ gatherWorkspaceSnapshot().then(payload => {
+ _lastBackupSnapshot = payload;
+ const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json;charset=utf-8' });
+ const a = document.createElement('a');
+ a.href = URL.createObjectURL(blob);
+ const d = new Date();
+ a.download = `نسخة_احتياطية_${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}.json`;
+ document.body.appendChild(a);
+ a.click();
+ document.body.removeChild(a);
+ setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+ if (statusEl) { statusEl.style.color = '#16a34a'; statusEl.textContent = 'تم تنزيل النسخة المحلية بنجاح.'; }
+ }).catch(err => {
+ console.log('backup download failed', err);
+ if (statusEl) { statusEl.style.color = '#dc2626'; statusEl.textContent = 'تعذّر تجهيز الملف.'; }
+ });
+}
+
+// Populates the employee dropdown shown when creating a self-service
+// employee account. Options come straight from this workspace's leave-card
+// records (leaveCardsSystem/{owner}/employees), keyed by each card's unique
+// idnum — not by name — so the account is linked directly to a specific
+// card and never needs name-matching later.
+function populateNewAcctEmployeeSelect() {
+ const sel = document.getElementById('newAcctEmployeeName');
+ if (!sel) return;
+ sel.innerHTML = '<option value="">جارِ التحميل…</option>';
+ fbDB.ref('leaveCardsSystem/' + myWorkspaceOwner + '/employees').once('value').then(snap => {
+   const list = snap.val();
+   const employees = Array.isArray(list) ? list : (list && typeof list === 'object' ? Object.values(list) : []);
+   const withCards = employees.filter(e => e && e.idnum);
+   if (!withCards.length) {
+     sel.innerHTML = '<option value="">لا توجد بطاقات إجازات بعد — أنشئ بطاقة الموظف أولاً من نظام الإجازات</option>';
+     return;
+   }
+   sel.innerHTML = '<option value="">— اختر بطاقة الموظف —</option>' +
+     withCards.map(e => `<option value="${escapeHtml(e.idnum)}" data-name="${escapeHtml(e.name || '')}">${escapeHtml(e.name || '')}${e.dept ? ' — ' + escapeHtml(e.dept) : ''}</option>`).join('');
+ }).catch(err => {
+   console.error('populateNewAcctEmployeeSelect failed', err);
+   sel.innerHTML = '<option value="">تعذّر تحميل بطاقات الإجازات</option>';
+ });
+}
+
+// Saves the department typed for a given member account, then refreshes
+// the department checkbox list used by the announcement composer so newly
+// typed departments show up immediately.
+function updateMemberDepartment(uid, dept) {
+ const clean = (dept || '').trim();
+ staffMemberRef(uid).child('department').set(clean)
+ .then(() => { renderAnnouncementDeptOptions(); })
+ .catch(err => console.error('updateMemberDepartment failed', err));
+}
+
+// ═══════════════════════════════════════════════════════════════
+// ANNOUNCEMENTS (تبليغات للموظفين) — admin writes a message, picks
+// which departments should see it, and can track who has read it.
+// Stored at announcements/{workspaceOwner}/{annId}. Read receipts
+// live under announcements/{workspaceOwner}/{annId}/reads/{uid}.
+// ═══════════════════════════════════════════════════════════════
+function renderAnnouncementDeptOptions() {
+ const wrap = document.getElementById('annDeptOptions');
+ if (!wrap || !isAdmin) return;
+ staffMembersRef().once('value').then(snap => {
+ const depts = new Set();
+ snap.forEach(child => {
+ const p = child.val();
+ if (p.department && p.department.trim()) depts.add(p.department.trim());
+ });
+ const sorted = Array.from(depts).sort((a, b) => a.localeCompare(b, 'ar'));
+ if (sorted.length === 0) {
+ wrap.innerHTML = '<div style="color:#94a3b8;font-size:0.82rem">لا توجد أقسام بعد — أضف قسم لكل موظف من جدول "الحسابات الحالية" أولاً.</div>';
+ return;
+ }
+ wrap.innerHTML = sorted.map(d => `
+ <label style="display:flex;align-items:center;gap:6px;font-size:0.85rem;color:#10203a;font-weight:600;cursor:pointer;background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:6px 10px">
+ <input type="checkbox" class="ann-dept-cb" value="${escapeHtml(d)}" style="width:16px;height:16px"> ${escapeHtml(d)}
+ </label>`).join('');
+ });
+}
+
+function sendAnnouncement() {
+ const statusEl = document.getElementById('annStatus');
+ const msgEl = document.getElementById('annMessage');
+ const message = (msgEl.value || '').trim();
+ const departments = Array.from(document.querySelectorAll('.ann-dept-cb:checked')).map(cb => cb.value);
+
+ statusEl.style.color = '#475569';
+ if (!message) { statusEl.style.color = '#dc2626'; statusEl.textContent = 'الرجاء كتابة نص التبليغ.'; return; }
+ if (departments.length === 0) { statusEl.style.color = '#dc2626'; statusEl.textContent = 'الرجاء اختيار قسم واحد على الأقل.'; return; }
+
+ statusEl.textContent = 'جارِ الإرسال...';
+ const ann = {
+ message, departments,
+ createdAt: Date.now(),
+ createdBy: myDisplayName || 'المشرف',
+ reads: {}
+ };
+ fbDB.ref('announcements/' + myWorkspaceOwner).push(ann)
+ .then(() => {
+ statusEl.style.color = '#16a34a';
+ statusEl.textContent = 'تم إرسال التبليغ.';
+ logActivity('إرسال تبليغ', `${departments.join('، ')} — ${message.slice(0, 60)}`);
+ msgEl.value = '';
+ document.querySelectorAll('.ann-dept-cb:checked').forEach(cb => cb.checked = false);
+ renderAnnouncementHistory();
+ sendPushNotification(departments, message);
+ })
+ .catch(err => {
+ statusEl.style.color = '#dc2626';
+ statusEl.textContent = 'تعذّر الإرسال: ' + (err && err.message ? err.message : err);
+ });
+}
+
+// Fires the push notification through the Cloudflare Worker (which holds
+// the private Firebase service-account credentials and looks up device
+// tokens under pushTokens/{uid} by department). Best-effort — the تبليغ
+// itself is already saved in Firebase regardless of whether the push
+// succeeds, so failures here are only logged, not shown as an error to the admin.
+function sendPushNotification(departments, message) {
+ if (!ANNOUNCEMENT_WORKER_URL) return;
+ fetch(ANNOUNCEMENT_WORKER_URL, {
+ method: 'POST',
+ headers: { 'Content-Type': 'application/json' },
+ body: JSON.stringify({ departments, message }),
+ }).catch(err => console.error('sendPushNotification failed', err));
+}
+
+let _annHistoryRef = null;
+function renderAnnouncementHistory() {
+ const listEl = document.getElementById('annHistoryList');
+ if (!listEl || !isAdmin) return;
+
+ if (_annHistoryRef) _annHistoryRef.off('value');
+ _annHistoryRef = fbDB.ref('announcements/' + myWorkspaceOwner);
+ _annHistoryRef.on('value', annSnap => {
+ // Member roster changes rarely, so a fresh once() read alongside each
+ // live announcements update is cheap and keeps read-receipts accurate.
+ staffMembersRef().once('value').then(memSnap => {
+ const anns = [];
+ annSnap.forEach(child => anns.push({ id: child.key, ...child.val() }));
+ anns.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+
+ if (anns.length === 0) {
+ listEl.innerHTML = '<div style="text-align:center;color:#94a3b8;padding:16px;font-size:0.85rem">لا توجد تبليغات بعد</div>';
+ return;
+ }
+
+ // Build a per-department roster of employee accounts (uid -> name) so
+ // we can show exactly who has/hasn't read each targeted announcement.
+ const employeesByDept = {};
+ memSnap.forEach(child => {
+ const p = child.val();
+ if (!p.department) return;
+ const dept = p.department.trim();
+ if (!dept) return;
+ if (!employeesByDept[dept]) employeesByDept[dept] = [];
+ employeesByDept[dept].push({ uid: child.key, name: p.name || p.employeeName || p.phone || 'موظف' });
+ });
+
+ listEl.innerHTML = anns.map(a => {
+ const reads = a.reads || {};
+ const targeted = [];
+ const seenUids = new Set();
+ (a.departments || []).forEach(d => {
+ (employeesByDept[d] || []).forEach(emp => {
+ if (!seenUids.has(emp.uid)) { seenUids.add(emp.uid); targeted.push(emp); }
+ });
+ });
+ const readCount = targeted.filter(e => reads[e.uid]).length;
+ const dateStr = a.createdAt ? new Date(a.createdAt).toLocaleString('ar-EG-u-nu-latn') : '';
+ const rows = targeted.map(e => `
+ <div style="display:flex;justify-content:space-between;padding:4px 0;font-size:0.8rem">
+ <span>${escapeHtml(e.name)}</span>
+ <span style="font-weight:700;color:${reads[e.uid] ? '#16a34a' : '#dc2626'}">${reads[e.uid] ? 'قرأها' : '● لم يقرأها بعد'}</span>
+ </div>`).join('') || '<div style="color:#94a3b8;font-size:0.8rem">لا يوجد موظفون مرتبطون بهذه الأقسام حالياً</div>';
+
+ return `<div style="background:#f8fafc;border-radius:12px;padding:16px;margin-bottom:12px;border:1px solid #e2e8f0">
+ <div style="display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:8px">
+ <div style="font-weight:800;color:#10203a;font-size:0.85rem"> ${escapeHtml((a.departments || []).join('، '))}</div>
+ <div style="font-size:0.75rem;color:#94a3b8">${dateStr} — ${readCount}/${targeted.length} قرأوا التبليغ</div>
+ </div>
+ <div style="color:#334155;font-size:0.88rem;margin-bottom:10px;white-space:pre-wrap">${escapeHtml(a.message || '')}</div>
+ <details>
+ <summary style="cursor:pointer;font-size:0.8rem;color:#2563eb;font-weight:700">عرض من قرأ ومن لم يقرأ (${targeted.length})</summary>
+ <div style="margin-top:8px;border-top:1px solid #e2e8f0;padding-top:8px">${rows}</div>
+ </details>
+ <button onclick="deleteAnnouncement('${a.id}')" style="margin-top:10px;background:#64748b;color:#fff;border:none;padding:5px 12px;border-radius:6px;cursor:pointer;font-size:0.75rem;font-weight:700">حذف التبليغ</button>
+ </div>`;
+ }).join('');
+ }).catch(err => {
+ console.error('renderAnnouncementHistory failed', err);
+ listEl.innerHTML = '<div style="text-align:center;color:#dc2626;padding:16px;font-size:0.85rem">تعذّر تحميل سجل التبليغات</div>';
+ });
+ }, err => {
+ console.error('renderAnnouncementHistory failed', err);
+ listEl.innerHTML = '<div style="text-align:center;color:#dc2626;padding:16px;font-size:0.85rem">تعذّر تحميل سجل التبليغات</div>';
+ });
+}
+
+function deleteAnnouncement(annId) {
+ if (!confirm('هل تريد حذف هذا التبليغ نهائياً؟')) return;
+ fbDB.ref('announcements/' + myWorkspaceOwner + '/' + annId).remove()
+ .then(() => renderAnnouncementHistory())
+ .catch(err => console.error('deleteAnnouncement failed', err));
+}
+
+function populateMergeNameSelect() {
+ const sel = document.getElementById('mergeNewName');
+ if (!sel) return;
+ fbDB.ref('leaveCardsSystem/' + myWorkspaceOwner + '/employees').once('value').then(snap => {
+   const list = snap.val();
+   const employees = Array.isArray(list) ? list : (list && typeof list === 'object' ? Object.values(list) : []);
+   const names = [...new Set(employees.filter(e => e && e.name).map(e => e.name))];
+   sel.innerHTML = '<option value="">— اختر الاسم الصحيح —</option>' +
+     names.map(n => `<option value="${escapeHtml(n)}">${escapeHtml(n)}</option>`).join('');
+ }).catch(err => console.error('populateMergeNameSelect failed', err));
+}
+
+// Merges every trace of an old/duplicate employee name into the correct one:
+// daily attendance records, leaves/زمنية history, the morning/evening rosters,
+// the extra/removed name lists, and any self-service employee account linked
+// to the old name. Use this when the same person ended up with two different
+// name spellings (or a trainee name that later became their real name).
+async function mergeEmployeeNames() {
+ const oldName = (document.getElementById('mergeOldName').value || '').trim();
+ const newName = (document.getElementById('mergeNewName').value || '').trim();
+ const statusEl = document.getElementById('mergeStatus');
+
+ if (!oldName || !newName) {
+ statusEl.style.color = '#dc2626';
+ statusEl.textContent = 'يرجى كتابة الاسم القديم واختيار الاسم الصحيح.';
+ return;
+ }
+ if (oldName === newName) {
+ statusEl.style.color = '#dc2626';
+ statusEl.textContent = 'الاسمان متطابقان، لا حاجة للدمج.';
+ return;
+ }
+ if (!confirm(`سيتم نقل كل سجلات "${oldName}" (حضور، اجازات، زمنيات) لتصبح تحت اسم "${newName}"، ولن يمكن التراجع عن هذا الإجراء.\n\nمتابعة؟`)) return;
+
+ statusEl.style.color = '#475569';
+ statusEl.textContent = 'جارِ الدمج...';
+
+ try {
+ // 1) Daily attendance reports (this is what feeds التقرير الشهري / التقارير اليومية)
+ const dailySnap = await fbDB.ref(dbPath('dailyReports')).once('value');
+ const dailyVal = dailySnap.val() || {};
+ const dailyUpdates = {};
+ Object.keys(dailyVal).forEach(day => {
+ ['morning', 'evening'].forEach(shift => {
+ const arr = dailyVal[day] && dailyVal[day][shift];
+ if (!Array.isArray(arr)) return;
+ arr.forEach((emp, idx) => {
+ if (emp && emp.name && emp.name.trim() === oldName) {
+ dailyUpdates[`dailyReports/${day}/${shift}/${idx}/name`] = newName;
+ }
+ });
+ });
+ });
+ if (Object.keys(dailyUpdates).length) {
+ await fbDB.ref(currentUserBase()).update(dailyUpdates);
+ }
+
+ // 2) Leaves / زمنية history
+ const leavesSnap = await fbDB.ref(dbPath('appData/leavesData')).once('value');
+ let leaves = [];
+ try { leaves = JSON.parse(leavesSnap.val() || '[]'); } catch (e) { leaves = []; }
+ leaves = leaves.map(r => (r.emp === oldName ? { ...r, emp: newName } : r));
+ await fbDB.ref(dbPath('appData/leavesData')).set(JSON.stringify(leaves));
+
+ // 3) Morning/evening rosters (stored in Firebase under appData/<key>)
+ for (const key of ['morningRosterNames', 'eveningRosterNames']) {
+ const rosterSnap = await fbDB.ref(dbPath('appData/' + key)).once('value');
+ let names = [];
+ try { names = JSON.parse(rosterSnap.val() || '[]'); } catch (e) { names = []; }
+ if (names.includes(oldName)) {
+ names = [...new Set(names.map(n => (n === oldName ? newName : n)))];
+ await fbDB.ref(dbPath('appData/' + key)).set(JSON.stringify(names));
+ }
+ }
+
+ // 4) Manually-added/removed name lists (stored in Firebase under appData/extraEmployees /removedEmployees)
+ for (const key of ['extraEmployees', 'removedEmployees']) {
+ const listSnap = await fbDB.ref(dbPath('appData/' + key)).once('value');
+ let list = [];
+ try { list = JSON.parse(listSnap.val() || '[]'); } catch (e) { list = []; }
+ if (list.includes(oldName)) {
+ const updated = key === 'extraEmployees'
+ ? [...new Set(list.map(n => (n === oldName ? newName : n)))]
+ : list.filter(n => n !== oldName);
+ await fbDB.ref(dbPath('appData/' + key)).set(JSON.stringify(updated));
+ }
+ }
+
+ // 5) Any self-service employee account linked to the old name
+ const membersSnap = await staffMembersRef().once('value');
+ const memberUpdates = {};
+ membersSnap.forEach(child => {
+ const m = child.val();
+ if (m && m.employeeName === oldName) {
+ memberUpdates['staffMembers/' + myWorkspaceOwner + '/' + child.key + '/employeeName'] = newName;
+ }
+ });
+ if (Object.keys(memberUpdates).length) {
+ await fbDB.ref().update(memberUpdates);
+ }
+
+ logActivity('دمج أسماء موظفين', `"${oldName}" "${newName}"`);
+ statusEl.style.color = '#16a34a';
+ statusEl.textContent = 'تم الدمج بنجاح. أعد فتح التقرير الشهري لرؤية النتيجة.';
+ document.getElementById('mergeOldName').value = '';
+
+ populateNewAcctEmployeeSelect();
+ populateMergeNameSelect();
+ } catch (err) {
+ console.error('mergeEmployeeNames failed', err);
+ statusEl.style.color = '#dc2626';
+ statusEl.textContent = 'تعذّر الدمج: ' + (err && err.message ? err.message : err);
+ }
+}
+
+// Switches the create-account form between "مشرف فرعي" (tabs/permissions)
+// and "موظف" (self-service, linked to one employee name) modes.
+function toggleAccountTypeUI(changedId) {
+ const selfEl = document.getElementById('newAcctSelfService');
+ const adminEl = document.getElementById('newAcctIsAdmin');
+ if (changedId === 'newAcctSelfService' && selfEl.checked) adminEl.checked = false;
+ if (changedId === 'newAcctIsAdmin' && adminEl.checked) selfEl.checked = false;
+ const isSelfService = !!selfEl.checked;
+ const isAdminAcct = !!adminEl.checked;
+ document.getElementById('newAcctEmployeeFields').style.display = isSelfService ? '' : 'none';
+ document.getElementById('newAcctSystemsGrid').style.display = (isSelfService || isAdminAcct) ? 'none' : '';
+ if (isSelfService) populateNewAcctEmployeeSelect();
+}
+
+// ── Employee self-service requests (pending queue for the admin) ──
+// Live-updates: keeps a persistent Firebase listener open on this admin's
+// leaveRequests, so new requests / approvals / deletions from any device
+// appear here instantly without needing to reload the page. We detach any
+// previous listener first so re-opening this screen never stacks up
+// duplicate listeners (which would otherwise double-render on every change).
+let _pendingRequestsRef = null;
+// Pulls the latest photo + department (keyed by idnum) from نظام متابعة's
+// leave-cards data into the shared caches. Called before rendering any
+// screen that shows employee avatars/department, so it works whether the
+// manager portal or لوحة تحكم المشرف happens to load first in a session.
+// نظام متابعة الإجازات is treated as the one source of truth for this —
+// same idnum link already used for photos, now covering department too.
+function refreshEmployeeInfoFromLeaveCards() {
+  return fbDB.ref(leaveCardsDbPath()).once('value')
+    .then(s => s.val())
+    .then(v => v ? v : fbDB.ref(LEGACY_LEAVE_CARDS_DB_PATH).once('value').then(s2 => s2.val()).catch(() => null))
+    .then(leaveCardsEmployees => {
+      let changed = false;
+      (Array.isArray(leaveCardsEmployees) ? leaveCardsEmployees : Object.values(leaveCardsEmployees || {}))
+        .forEach(emp => {
+          if (!emp || !emp.idnum) return;
+          if (emp.photo && employeePhotosById[emp.idnum] !== emp.photo) {
+            employeePhotosById[emp.idnum] = emp.photo;
+            changed = true;
+          }
+          if (emp.dept && employeeDeptById[emp.idnum] !== emp.dept) {
+            employeeDeptById[emp.idnum] = emp.dept;
+            changed = true;
+          }
+        });
+      if (changed) saveEmployeeListToStorage();
+    })
+    .catch(() => {});
+}
+
+function loadPendingEmployeeRequests() {
+ const panel = document.getElementById('employeeRequestsList');
+ const historyPanel = document.getElementById('employeeRequestsHistoryList');
+ if (!panel) return;
+ panel.innerHTML = '<div style="text-align:center;color:#94a3b8;padding:16px;font-size:0.85rem">جارِ التحميل...</div>';
+ if (historyPanel) historyPanel.innerHTML = '<div style="text-align:center;color:#94a3b8;padding:16px;font-size:0.85rem">جارِ التحميل...</div>';
+
+ if (_pendingRequestsRef) _pendingRequestsRef.off('value');
+ _pendingRequestsRef = fbDB.ref('leaveRequests/' + myWorkspaceOwner);
+ _pendingRequestsRef.on('value', snap => {
+ refreshEmployeeInfoFromLeaveCards().finally(() => {
+   renderPendingEmployeeRequests(snap.val() || {});
+ });
+ }, err => {
+ panel.innerHTML = '<div style="text-align:center;color:#dc2626;padding:16px;font-size:0.85rem">تعذّر تحميل الطلبات</div>';
+ if (historyPanel) historyPanel.innerHTML = '<div style="text-align:center;color:#dc2626;padding:16px;font-size:0.85rem">تعذّر تحميل الطلبات</div>';
+ console.error('loadPendingEmployeeRequests failed', err);
+ });
+}
+
+function renderPendingEmployeeRequests(val) {
+ const panel = document.getElementById('employeeRequestsList');
+ const historyPanel = document.getElementById('employeeRequestsHistoryList');
+ if (!panel) return;
+ const all = Object.keys(val).map(id => ({ id, ...val[id] }));
+ const pending = all
+ .filter(r => !r.status || r.status === 'pending')
+ .sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
+ const decided = all
+ .filter(r => r.status === 'approved' || r.status === 'declined')
+ .sort((a, b) => (b.decidedAt || b.createdAt || 0) - (a.decidedAt || a.createdAt || 0));
+
+ if (pending.length === 0) {
+ panel.innerHTML = '<div style="text-align:center;color:#94a3b8;padding:16px;font-size:0.85rem">لا توجد طلبات جديدة من الموظفين</div>';
+ } else {
+ panel.innerHTML = pending.map(r => `
+ <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;background:#fff;border:1px solid #e2e8f0;border-radius:10px;padding:12px 16px;margin-bottom:8px;flex-wrap:wrap">
+ <div style="display:flex;align-items:center;gap:10px;">
+ <span onclick="openEmployeeProfileModal('${(r.employeeName||'').replace(/'/g,"\\'")}', '${(r.employeeCardId||'').replace(/'/g,"\\'")}')">${employeeAvatarHTML(r.employeeName, 38, r.employeeCardId)}</span>
+ <div>
+ <div style="font-weight:700;color:#10203a;cursor:pointer;" onclick="openEmployeeProfileModal('${(r.employeeName||'').replace(/'/g,"\\'")}', '${(r.employeeCardId||'').replace(/'/g,"\\'")}')">${escapeHtml(r.employeeName)} — ${escapeHtml(r.type)} — ${escapeHtml(r.date)}</div>
+ ${r.createdAt ? `<div style="font-size:0.78rem;color:#94a3b8;margin-top:2px">🕒 وقت تقديم الطلب: ${escapeHtml(new Date(r.createdAt).toLocaleString('ar-EG-u-nu-latn', { year:'numeric', month:'long', day:'numeric', hour:'2-digit', minute:'2-digit' }))}</div>` : ''}
+ ${r.notes ? `<div style="font-size:0.8rem;color:#64748b;margin-top:2px">${escapeHtml(r.notes)}</div>` : ''}
+ ${r.sickProofImage ? `<div style="margin-top:6px"><img src="${r.sickProofImage}" style="max-width:140px;max-height:100px;border-radius:6px;border:1px solid #e2e8f0;cursor:pointer" onclick="window.open(this.src,'_blank')" title="اضغط للتكبير"></div>` : ''}
+ </div>
+ </div>
+ <div style="display:flex;gap:8px">
+ <button onclick='approveEmployeeRequest(${JSON.stringify(r.id)})' style="background:#16a34a;color:#fff;border:none;padding:7px 16px;border-radius:7px;cursor:pointer;font-weight:700;font-size:0.82rem">قبول</button>
+ <button onclick='declineEmployeeRequest(${JSON.stringify(r.id)})' style="background:#dc2626;color:#fff;border:none;padding:7px 16px;border-radius:7px;cursor:pointer;font-weight:700;font-size:0.82rem">رفض</button>
+ <button onclick='deleteEmployeeRequest(${JSON.stringify(r.id)})' style="background:#64748b;color:#fff;border:none;padding:7px 16px;border-radius:7px;cursor:pointer;font-weight:700;font-size:0.82rem">حذف</button>
+ </div>
+ </div>`).join('');
+ }
+
+ if (historyPanel) {
+ if (decided.length === 0) {
+ historyPanel.innerHTML = '<div style="text-align:center;color:#94a3b8;padding:16px;font-size:0.85rem">لا توجد طلبات سابقة بعد</div>';
+ } else {
+ historyPanel.innerHTML = decided.map(r => {
+ const statusLabel = r.status === 'approved' ? '<span style="color:#16a34a;font-weight:700">مقبول </span>' : '<span style="color:#dc2626;font-weight:700">مرفوض </span>';
+ return `
+ <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;background:#fff;border:1px solid #e2e8f0;border-radius:10px;padding:12px 16px;margin-bottom:8px;flex-wrap:wrap">
+ <div style="display:flex;align-items:center;gap:10px;">
+ <span onclick="openEmployeeProfileModal('${(r.employeeName||'').replace(/'/g,"\\'")}', '${(r.employeeCardId||'').replace(/'/g,"\\'")}')">${employeeAvatarHTML(r.employeeName, 38, r.employeeCardId)}</span>
+ <div>
+ <div style="font-weight:700;color:#10203a;cursor:pointer;" onclick="openEmployeeProfileModal('${(r.employeeName||'').replace(/'/g,"\\'")}', '${(r.employeeCardId||'').replace(/'/g,"\\'")}')">${escapeHtml(r.employeeName)} — ${escapeHtml(r.type)} — ${escapeHtml(r.date)} — ${statusLabel}</div>
+ ${r.createdAt ? `<div style="font-size:0.78rem;color:#94a3b8;margin-top:2px">🕒 وقت تقديم الطلب: ${escapeHtml(new Date(r.createdAt).toLocaleString('ar-EG-u-nu-latn', { year:'numeric', month:'long', day:'numeric', hour:'2-digit', minute:'2-digit' }))}</div>` : ''}
+ ${r.notes ? `<div style="font-size:0.8rem;color:#64748b;margin-top:2px">${escapeHtml(r.notes)}</div>` : ''}
+ ${r.sickProofImage ? `<div style="margin-top:6px"><img src="${r.sickProofImage}" style="max-width:140px;max-height:100px;border-radius:6px;border:1px solid #e2e8f0;cursor:pointer" onclick="window.open(this.src,'_blank')" title="اضغط للتكبير"></div>` : ''}
+ </div>
+ </div>
+ <div>
+ <button onclick='deleteEmployeeRequest(${JSON.stringify(r.id)})' style="background:#64748b;color:#fff;border:none;padding:7px 16px;border-radius:7px;cursor:pointer;font-weight:700;font-size:0.82rem">حذف</button>
+ </div>
+ </div>`;
+ }).join('');
+ }
+ }
+}
+
+// Permanently removes a leave request from Firebase — it disappears from
+// both the admin's panels and the employee's own "طلباتي السابقة" list,
+// since both read from the very same 'leaveRequests/{workspaceOwner}' path.
+function deleteEmployeeRequest(reqId) {
+ if (!confirm('هل تريد حذف هذا الطلب نهائيًا؟ سيختفي من حساب الموظف أيضًا.')) return;
+ const ref = fbDB.ref('leaveRequests/' + myWorkspaceOwner + '/' + reqId);
+ ref.once('value').then(snap => {
+ const r = snap.val();
+ return ref.remove().then(() => {
+ if (r) logActivity('حذف طلب موظف', `${r.employeeName} — ${r.type} — ${r.date}`);
+ // No manual reload needed — the live listener in loadPendingEmployeeRequests
+ // picks this up automatically and re-renders.
+ });
+ }).catch(err => {
+ alert('تعذّر حذف الطلب: ' + (err && err.message ? err.message : err));
+ console.error('deleteEmployeeRequest failed', err);
+ });
+}
+
+// Fires a push notification at a single employee (identified by uid),
+// through the same Cloudflare Worker used for department-wide تبليغات.
+// Best-effort — never blocks or shows an error to the admin if it fails.
+function sendPushToUser(uid, message) {
+ if (!ANNOUNCEMENT_WORKER_URL || !uid) return;
+ fetch(ANNOUNCEMENT_WORKER_URL, {
+ method: 'POST',
+ headers: { 'Content-Type': 'application/json' },
+ body: JSON.stringify({ uid, message }),
+ }).catch(err => console.error('sendPushToUser failed', err));
+}
+
+function approveEmployeeRequest(reqId) {
+ const ref = fbDB.ref('leaveRequests/' + myWorkspaceOwner + '/' + reqId);
+ ref.once('value').then(snap => {
+ const r = snap.val();
+ if (!r) return;
+ // Re-read the leaves log fresh from Firebase right before merging, so we
+ // never overwrite the cloud with a possibly-stale local copy (this was
+ // causing approved requests to silently vanish / not reach the employee).
+ return fbDB.ref(dbPath('appData/leavesData')).once('value').then(lsnap => {
+ let leaves = [];
+ try { leaves = JSON.parse(lsnap.val() || '[]'); } catch (e) { leaves = []; }
+ leaves.push({
+ emp: r.employeeName, date: r.date, type: r.type, notes: r.notes || '', id: Date.now(),
+ zmanya_from: r.zmanya_from || '', zmanya_to: r.zmanya_to || '', hours: r.hours || null,
+ sickProofImage: r.sickProofImage || null
+ });
+ leaves.sort((a, b) => new Date(b.date) - new Date(a.date));
+ return fbDB.ref(dbPath('appData/leavesData')).set(JSON.stringify(leaves)).then(() => {
+ return ref.update({ status: 'approved', decidedAt: Date.now() });
+ }).then(() => {
+ logActivity('قبول طلب موظف', `${r.employeeName} — ${r.type} — ${r.date}`);
+ sendPushToUser(r.employeeUid, ` تم قبول طلبك: ${r.type} — ${r.date}`);
+ });
+ });
+ }).catch(err => console.error('approveEmployeeRequest failed', err));
+}
+
+function declineEmployeeRequest(reqId) {
+ const ref = fbDB.ref('leaveRequests/' + myWorkspaceOwner + '/' + reqId);
+ ref.once('value').then(snap => {
+ const r = snap.val();
+ if (!r) return;
+ return ref.update({ status: 'declined', decidedAt: Date.now() }).then(() => {
+ logActivity('رفض طلب موظف', `${r.employeeName} — ${r.type} — ${r.date}`);
+ sendPushToUser(r.employeeUid, ` تم رفض طلبك: ${r.type} — ${r.date}`);
+ });
+ }).catch(err => console.error('declineEmployeeRequest failed', err));
+}
+
+
+// Firebase Authentication requires an email/password pair. Since we want
+// employees/staff to log in with a phone number instead of an email, we
+// silently convert the phone number into a fake-but-valid email address
+// behind the scenes (e.g. "07701234567" -> "07701234567@emp.local").
+// The real phone number is still stored and displayed everywhere in the UI.
+function phoneToEmail(phone) {
+ const digits = String(phone || '').replace(/[^0-9]/g, '');
+ return digits + '@emp.local';
+}
+
+// ── Staff-member data access (scoped per workspace) ───────────────────────
+// Staff profiles used to live in a single flat `members/{uid}` node shared
+// by every company using this app, which meant any signed-in account from
+// any company could read (and in some cases write) every other company's
+// staff list. They now live under `staffMembers/{workspaceOwner}/{uid}`, so
+// one company's staff data is only ever reachable through its own owner's
+// path. `memberIndex/{uid} -> workspaceOwner` is a small, non-sensitive
+// lookup table used only to figure out *which* workspace a given uid
+// belongs to right after login, before myWorkspaceOwner is known.
+function staffMembersRef() {
+  return fbDB.ref('staffMembers/' + myWorkspaceOwner);
+}
+function staffMemberRef(uid) {
+  return fbDB.ref('staffMembers/' + myWorkspaceOwner + '/' + uid);
+}
+
+// Resolves a signed-in uid's staff profile: checks the new scoped
+// location first (via memberIndex), and falls back to the legacy flat
+// `members/{uid}` node — migrating it into the new location on the fly —
+// for any account that hasn't been touched by the bulk migration yet.
+function resolveStaffProfile(uid) {
+  return fbDB.ref('memberIndex/' + uid).once('value').then(idxSnap => {
+    const owner = idxSnap.val();
+    if (owner) return fbDB.ref('staffMembers/' + owner + '/' + uid).once('value').then(s => s.val());
+    return fbDB.ref('members/' + uid).once('value').then(legacySnap => {
+      const legacyProfile = legacySnap.val();
+      if (!legacyProfile) return null;
+      return migrateLegacyMemberIfNeeded(uid, legacyProfile).then(() => legacyProfile);
+    });
+  });
+}
+
+// One-time, best-effort migration of a single legacy profile (old flat
+// `members/{uid}`) into the new scoped location + index. Safe to call more
+// than once — it no-ops once the new copy already exists. Used both as a
+// lazy per-account fallback at login and by the bulk migration below.
+function migrateLegacyMemberIfNeeded(uid, legacyProfile) {
+  if (!legacyProfile || !legacyProfile.workspaceOwner) return Promise.resolve();
+  const owner = legacyProfile.workspaceOwner;
+  return fbDB.ref('staffMembers/' + owner + '/' + uid).once('value').then(existing => {
+    if (existing.exists()) return;
+    return Promise.all([
+      fbDB.ref('staffMembers/' + owner + '/' + uid).set(legacyProfile),
+      fbDB.ref('memberIndex/' + uid).set(owner)
+    ]);
+  }).catch(err => console.log('legacy member migration failed for', uid, err && err.message));
+}
+
+// Bulk migration for an admin's whole team in one go, so the "الحسابات
+// الفرعية" list is complete immediately after this fix ships, without
+// waiting for every single staff member to log back in first. Runs once
+// per admin dashboard load; cheap no-op on repeat visits once migrated.
+function migrateLegacyMembersForWorkspace() {
+  return fbDB.ref('members').orderByChild('workspaceOwner').equalTo(myWorkspaceOwner).once('value')
+    .then(snap => {
+      const jobs = [];
+      snap.forEach(child => { jobs.push(migrateLegacyMemberIfNeeded(child.key, child.val())); });
+      return Promise.all(jobs);
+    })
+    .catch(err => console.log('bulk legacy member migration skipped:', err && err.message));
+}
+
+function createStaffAccount() {
+ const phone = document.getElementById('newAcctEmail').value.trim();
+ const email = phoneToEmail(phone);
+ const password = document.getElementById('newAcctPassword').value;
+ const name = document.getElementById('newAcctName').value.trim();
+ const acctIsAdmin = document.getElementById('newAcctIsAdmin').checked;
+ const isSelfService = document.getElementById('newAcctSelfService').checked;
+ const statusEl = document.getElementById('newAcctStatus');
+ statusEl.style.color = '#475569';
+ statusEl.textContent = '';
+
+ const empSel = document.getElementById('newAcctEmployeeName');
+ const empOption = empSel && empSel.selectedIndex >= 0 ? empSel.options[empSel.selectedIndex] : null;
+ const employeeCardId = isSelfService ? (empSel?.value || '') : '';
+ const employeeName = isSelfService ? (empOption?.dataset.name || '') : '';
+
+ if (!phone || !password || password.length < 6) {
+ statusEl.style.color = '#dc2626';
+ statusEl.textContent = 'الرجاء إدخال رقم هاتف وكلمة مرور (6 أحرف على الأقل).';
+ return;
+ }
+ if (isSelfService && !employeeCardId) {
+ statusEl.style.color = '#dc2626';
+ statusEl.textContent = 'الرجاء اختيار بطاقة الموظف المرتبطة بهذا الحساب.';
+ return;
+ }
+
+ const systems = acctIsAdmin || isSelfService
+ ? { matabaa: 'none', hr: 'none', accounts: 'none', admin: 'none' } // irrelevant for admin (sees all) / self-service (sees none of these)
+ : {
+ matabaa: document.getElementById('newAcctSysMatabaa')?.value || 'none',
+ hr: document.getElementById('newAcctSysHR')?.value || 'none',
+ manager: document.getElementById('newAcctSysManager')?.value || 'none',
+ accounts: document.getElementById('newAcctSysAccounts')?.value || 'none',
+ admin: document.getElementById('newAcctSysAdmin')?.value || 'none'
+ };
+
+ statusEl.style.color = '#475569';
+ statusEl.textContent = 'جارِ الإنشاء...';
+
+ secondaryAuth.createUserWithEmailAndPassword(email, password)
+ .then(cred => {
+ const newUid = cred.user.uid;
+ const profile = {
+ email, phone, name, workspaceOwner: myWorkspaceOwner,
+ isAdmin: acctIsAdmin, disabled: false,
+ selfService: isSelfService, employeeName: isSelfService ? employeeName : null,
+ employeeCardId: isSelfService ? employeeCardId : null,
+ systems,
+ currentPassword: password,
+ createdAt: Date.now(), createdBy: fbAuth.currentUser.uid
+ };
+ return staffMemberRef(newUid).set(profile)
+ .then(() => fbDB.ref('memberIndex/' + newUid).set(myWorkspaceOwner))
+ .then(() => acctIsAdmin ? fbDB.ref('admins/' + newUid).set(true) : null)
+ .finally(() => secondaryAuth.signOut()); // clean up the secondary session
+ })
+ .then(() => {
+ statusEl.style.color = '#16a34a';
+ statusEl.textContent = 'تم إنشاء الحساب بنجاح.';
+ const roleDesc = isSelfService ? `موظف (${employeeName})` : (acctIsAdmin ? 'مشرف' : systemsRoleLabel(systems, false));
+ logActivity('إنشاء حساب جديد', `${phone}${name ? ' (' + name + ')' : ''} — ${roleDesc}`);
+ document.getElementById('newAcctEmail').value = '';
+ document.getElementById('newAcctPassword').value = '';
+ document.getElementById('newAcctName').value = '';
+ document.getElementById('newAcctIsAdmin').checked = false;
+ document.getElementById('newAcctSelfService').checked = false;
+ ['newAcctSysMatabaa', 'newAcctSysHR', 'newAcctSysManager', 'newAcctSysAccounts', 'newAcctSysAdmin'].forEach(id => {
+ const el = document.getElementById(id);
+ if (el) el.value = 'none';
+ });
+ toggleAccountTypeUI();
+ renderAdminDashboard();
+ })
+ .catch(err => {
+ statusEl.style.color = '#dc2626';
+ statusEl.textContent = ' ' + (err.message || 'فشل إنشاء الحساب');
+ });
+}
+
+function toggleMemberDisabled(uid, disable) {
+ staffMemberRef(uid).child('disabled').set(disable).then(() => {
+ logActivity(disable ? 'تعطيل حساب' : 'تفعيل حساب', uid);
+ renderAdminDashboard();
+ });
+}
+
+// Flips whether a manager account (role:'manager') can approve/decline
+// employee leave requests, vs. staying report-only/read-only.
+function toggleManagerApprove(uid, grant) {
+ staffMemberRef(uid).child('canApprove').set(grant).then(() => {
+ logActivity(grant ? 'منح صلاحية موافقة لمدير' : 'إلغاء صلاحية موافقة عن مدير', uid);
+ renderAdminDashboard();
+ });
+}
+
+function toggleMemberHRAccess(uid, grant) {
+ staffMemberRef(uid).child('canAccessHR').set(grant).then(() => {
+ logActivity(grant ? 'منح صلاحية نظام الإجازات' : 'إلغاء صلاحية نظام الإجازات', uid);
+ renderAdminDashboard();
+ });
+}
+
+function setMemberAccountsAccessLevel(uid, level) {
+ const updates = { accountsAccessLevel: level, canAccessAccounts: null }; // clear legacy boolean field
+ staffMemberRef(uid).update(updates).then(() => {
+ const label = level === 'edit' ? 'مدير (صلاحية كاملة)' : level === 'view' ? 'موظف (فحص فقط)' : 'إلغاء الوصول';
+ logActivity('تعديل صلاحية نظام متابعة الحسابات', uid + ' — ' + label);
+ renderAdminDashboard();
+ });
+}
+
+// Removes the account's profile/permissions record entirely (members/{uid},
+// and admins/{uid} if it was a full admin). This immediately blocks the
+// account from accessing the app — same effect as "تعطيل" but permanent —
+// while leaving their leave/attendance history untouched. Note: this does
+// NOT delete the underlying Firebase Authentication login itself; that part
+// still needs to be removed manually from the Firebase Console if you also
+// want the phone number/password combo freed up for reuse.
+function deleteMemberAccount(uid, label) {
+ if (!confirm(`هل تريد حذف حساب "${label || uid}" نهائيًا؟\n\nلن يستطيع الدخول للبرنامج بعد الآن. سجلات الاجازات والحضور الخاصة به ستبقى محفوظة.`)) return;
+ staffMemberRef(uid).remove()
+ .then(() => fbDB.ref('memberIndex/' + uid).remove())
+ .then(() => fbDB.ref('admins/' + uid).remove())
+ .then(() => {
+ logActivity('حذف حساب', label || uid);
+ renderAdminDashboard();
+ })
+ .catch(err => {
+ alert('تعذّر حذف الحساب: ' + (err && err.message ? err.message : err));
+ console.error('deleteMemberAccount failed', err);
+ });
+}
+
+// Lets the admin set a new password for any account, without needing the
+// old one. Firebase's client SDK has no "admin reset" call, so this works
+// around that by signing in AS that account (using the password we saved
+// at creation time, in members/{uid}/currentPassword) through the
+// secondary auth instance, updating the password while "logged in" as
+// them, then immediately signing that session back out. The admin's own
+// session is untouched throughout, since it's a separate auth instance.
+function changeMemberPassword(uid, email, label) {
+ if (!email) { alert('لا يمكن تغيير كلمة السر لهذا الحساب (بريد غير معروف).'); return; }
+ const newPassword = prompt(`كلمة السر الجديدة لحساب "${label || email}" (6 أحرف على الأقل):`);
+ if (!newPassword) return;
+ if (newPassword.length < 6) { alert('كلمة السر يجب أن تكون 6 أحرف على الأقل.'); return; }
+
+ staffMemberRef(uid).child('currentPassword').once('value').then(snap => {
+ const oldPassword = snap.val();
+ if (!oldPassword) {
+ alert('لا توجد كلمة سر محفوظة لهذا الحساب (أُنشئ قبل إضافة هذه الميزة). لتغييرها يلزم حذف الحساب وإنشاؤه من جديد.');
+ return;
+ }
+ secondaryAuth.signInWithEmailAndPassword(email, oldPassword)
+ .then(cred => cred.user.updatePassword(newPassword))
+ .then(() => staffMemberRef(uid).child('currentPassword').set(newPassword))
+ .then(() => secondaryAuth.signOut())
+ .then(() => {
+ logActivity('تغيير كلمة السر', label || email);
+ alert('تم تغيير كلمة السر بنجاح.');
+ })
+ .catch(err => {
+ secondaryAuth.signOut();
+ alert('تعذّر تغيير كلمة السر: ' + (err && err.message ? err.message : err));
+ console.error('changeMemberPassword failed', err);
+ });
+ });
+}
+
+// ═══════════════════════════════════════════════════════════════
+// LOGIN / AUTH
+// ═══════════════════════════════════════════════════════════════
+
+
+// ── Boot ─────────────────────────────────────────────────────
+fbAuth.onAuthStateChanged(function (user) {
+  if (!user) {
+    document.getElementById('roleNotice').textContent = 'الرجاء تسجيل الدخول من الملف الرئيسي أولاً';
+    return;
+  }
+  fbDB.ref('admins/' + user.uid).once('value').then(adminSnap => {
+    if (adminSnap.val() === true) {
+      isAdmin = true;
+      myWorkspaceOwner = user.uid;
+      myDisplayName = (fbAuth.currentUser && fbAuth.currentUser.displayName) || 'المشرف';
+      boot();
+      return;
+    }
+    fbDB.ref('memberIndex/' + user.uid).once('value').then(idxSnap => {
+      const owner = idxSnap.val();
+      if (!owner) {
+        document.getElementById('roleNotice').textContent = 'حساب غير مرتبط بمساحة عمل';
+        return;
+      }
+      myWorkspaceOwner = owner;
+      staffMemberRef(user.uid).once('value').then(pSnap => {
+        const p = pSnap.val() || {};
+        const sys = computeMemberSystems(p);
+        if (sys.admin !== 'edit') {
+          document.getElementById('roleNotice').textContent = '🚫 ليس لديك صلاحية الوصول إلى لوحة تحكم المشرف.';
+          return;
+        }
+        myDisplayName = p.name || p.phone || '';
+        boot();
+      });
+    });
+  }).catch(() => {
+    document.getElementById('roleNotice').textContent = 'تعذّر الاتصال بقاعدة البيانات';
+  });
+});
+
+function boot() {
+  document.getElementById('roleNotice').style.display = 'none';
+  document.getElementById('adminRoot').style.display = 'flex';
+  document.getElementById('adminRoot').style.flexDirection = 'column';
+  showAdminSection(lastAdminSection);
+}
+
+function doLogout() { fbAuth.signOut(); }
+</script>
+</body>
+</html>
