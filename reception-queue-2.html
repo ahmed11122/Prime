@@ -1,0 +1,500 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>نظام الاستقبال - الطابور</title>
+<style>
+  :root{
+    --ink:#0b1e3d;
+    --paper:#f2f6fc;
+    --brass:#1a5cf0;
+    --brass-dark:#0e3fc4;
+    --moss:#0b1e3d;
+    --moss-dark:#061530;
+    --line:#d9e2f2;
+    --waiting:#7488a8;
+    --called:#1a5cf0;
+    --done:#3fa66b;
+    --white:#ffffff;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    font-family:'Tahoma','Segoe UI',sans-serif;
+    background:var(--paper);
+    color:var(--ink);
+    min-height:100vh;
+  }
+  .app-shell{max-width:1200px;margin:0 auto;padding:0 20px 60px;}
+
+  /* top bar / view switch */
+  header.top{
+    display:flex;align-items:center;justify-content:space-between;
+    padding:22px 0 16px;border-bottom:2px solid var(--ink);
+    margin-bottom:26px;flex-wrap:wrap;gap:14px;
+  }
+  .brand{display:flex;align-items:center;gap:12px;}
+  .brand .mark{
+    width:38px;height:38px;border-radius:50%;
+    background:var(--moss);color:var(--white);
+    display:flex;align-items:center;justify-content:center;
+    font-weight:700;font-size:18px;
+  }
+  .brand h1{font-size:19px;margin:0;letter-spacing:.5px;}
+  .brand p{margin:0;font-size:12px;color:#66604f;}
+
+  nav.views{display:flex;gap:8px;background:var(--white);border:1px solid var(--line);border-radius:10px;padding:4px;}
+  nav.views button{
+    border:none;background:transparent;padding:9px 16px;font-size:13.5px;
+    border-radius:7px;cursor:pointer;color:#5b5748;font-weight:600;
+    font-family:inherit;
+  }
+  nav.views button.active{background:var(--ink);color:var(--white);}
+
+  .view{display:none;}
+  .view.active{display:block;}
+
+  /* section label */
+  .eyebrow{
+    font-size:11.5px;letter-spacing:1.5px;color:var(--brass-dark);
+    font-weight:700;margin-bottom:6px;text-transform:uppercase;
+  }
+  h2.section-title{font-size:24px;margin:0 0 22px;}
+
+  /* ===== KIOSK ===== */
+  .kiosk-card{
+    background:var(--white);border:1px solid var(--line);border-radius:16px;
+    padding:32px;max-width:620px;margin:0 auto;
+  }
+  .field{margin-bottom:20px;}
+  .field label{display:block;font-size:13px;font-weight:700;margin-bottom:8px;color:#41453f;}
+  .field input, .field select{
+    width:100%;padding:13px 14px;border:1.5px solid var(--line);border-radius:9px;
+    font-size:15px;font-family:inherit;background:var(--paper);color:var(--ink);
+  }
+  .field input:focus, .field select:focus{outline:2px solid var(--moss);outline-offset:1px;border-color:var(--moss);}
+  .dept-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:10px;margin-bottom:22px;}
+  .dept-btn{
+    border:1.5px solid var(--line);background:var(--paper);border-radius:11px;
+    padding:16px 10px;cursor:pointer;font-family:inherit;font-size:14px;font-weight:700;
+    color:var(--ink);text-align:center;transition:.15s;
+  }
+  .dept-btn:hover{border-color:var(--moss);}
+  .dept-btn.selected{background:var(--moss);color:var(--white);border-color:var(--moss);}
+  .btn-primary{
+    width:100%;padding:15px;background:var(--moss);color:var(--white);border:none;
+    border-radius:9px;font-size:15.5px;font-weight:700;cursor:pointer;font-family:inherit;
+  }
+  .btn-primary:hover{background:var(--moss-dark);}
+  .btn-primary:disabled{background:#b9b4a4;cursor:not-allowed;}
+
+  .ticket-result{
+    text-align:center;padding:30px 20px;background:var(--moss);color:var(--white);
+    border-radius:14px;margin-top:10px;
+  }
+  .ticket-result .num{font-size:52px;font-weight:800;letter-spacing:1px;margin:6px 0;}
+  .ticket-result .sub{font-size:13px;opacity:.85;}
+
+  /* ===== RECEPTION DASHBOARD ===== */
+  .dash-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px;}
+  .dept-column{background:var(--white);border:1px solid var(--line);border-radius:14px;overflow:hidden;}
+  .dept-column .col-head{
+    background:var(--ink);color:var(--white);padding:14px 18px;
+    display:flex;justify-content:space-between;align-items:center;
+  }
+  .dept-column .col-head h3{margin:0;font-size:15px;}
+  .dept-column .col-head .count{
+    background:var(--brass);color:var(--white);border-radius:20px;
+    padding:2px 10px;font-size:12.5px;font-weight:700;
+  }
+  .now-serving{
+    padding:14px 18px;background:#e4edfc;border-bottom:1px solid var(--line);
+    font-size:13px;color:var(--brass-dark);min-height:20px;
+  }
+  .now-serving b{font-size:15px;display:block;margin-top:2px;color:var(--ink);}
+  .ticket-list{list-style:none;margin:0;padding:0;max-height:340px;overflow-y:auto;}
+  .ticket-list li{
+    padding:12px 18px;border-bottom:1px solid #ece7d8;display:flex;
+    justify-content:space-between;align-items:center;font-size:14px;
+  }
+  .ticket-list li:last-child{border-bottom:none;}
+  .t-name{font-weight:700;}
+  .t-time{font-size:11.5px;color:#8a8570;}
+  .status-pill{font-size:11px;padding:3px 9px;border-radius:20px;font-weight:700;}
+  .status-pill.waiting{background:#e8edf6;color:var(--waiting);}
+  .status-pill.called{background:#dbe7fd;color:var(--brass);}
+  .status-pill.done{background:#e0f3e7;color:var(--done);}
+  .empty-msg{padding:24px 18px;text-align:center;color:#9a957f;font-size:13px;}
+
+  /* ===== STAFF VIEW ===== */
+  .staff-picker{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:26px;}
+  .staff-picker button{
+    padding:10px 18px;border-radius:9px;border:1.5px solid var(--line);
+    background:var(--white);cursor:pointer;font-family:inherit;font-weight:700;font-size:13.5px;
+  }
+  .staff-picker button.active{background:var(--moss);color:var(--white);border-color:var(--moss);}
+
+  .staff-panel{
+    background:var(--white);border:1px solid var(--line);border-radius:16px;
+    padding:30px;max-width:520px;margin:0 auto;text-align:center;
+  }
+  .staff-panel h3{margin-top:0;font-size:18px;}
+  .waiting-count{font-size:13px;color:#66604f;margin-bottom:22px;}
+  .waiting-count b{color:var(--ink);font-size:16px;}
+  .call-btn{
+    width:100%;padding:22px;font-size:19px;font-weight:800;color:var(--white);
+    background:var(--brass);border:none;border-radius:14px;cursor:pointer;font-family:inherit;
+    margin-bottom:14px;
+  }
+  .call-btn:hover{background:var(--brass-dark);}
+  .call-btn:disabled{background:#c9c2af;cursor:not-allowed;}
+  .current-visitor{
+    background:var(--paper);border:1.5px dashed var(--moss);border-radius:12px;
+    padding:18px;margin-bottom:14px;
+  }
+  .current-visitor .label{font-size:12px;color:#66604f;margin-bottom:4px;}
+  .current-visitor .name{font-size:20px;font-weight:800;}
+  .done-btn{
+    width:100%;padding:12px;font-size:14px;font-weight:700;color:var(--moss);
+    background:transparent;border:1.5px solid var(--moss);border-radius:9px;cursor:pointer;font-family:inherit;
+  }
+  .done-btn:hover{background:var(--moss);color:var(--white);}
+
+  .sync-note{
+    font-size:11.5px;color:#8a8570;text-align:center;margin-top:30px;
+    border-top:1px solid var(--line);padding-top:16px;
+  }
+
+  /* ===== PRINT TICKET ===== */
+  #printArea{display:none;}
+  @media print{
+    @page{ size: 80mm auto; margin: 4mm; }
+    .app-shell > *:not(#printArea){display:none !important;}
+    #printArea{
+      display:block;position:static;width:100%;
+      padding:0;font-family:'Tahoma',sans-serif;text-align:center;
+    }
+    #printArea .p-num{font-size:46px;font-weight:800;margin:8px 0;}
+    #printArea .p-line{border-top:1px dashed #000;margin:8px 0;}
+    #printArea .p-small{font-size:11px;}
+  }
+
+  /* voice toggle */
+  .voice-toggle{
+    display:flex;align-items:center;gap:8px;font-size:12.5px;color:#5b5748;
+    background:var(--white);border:1px solid var(--line);border-radius:9px;
+    padding:8px 12px;cursor:pointer;user-select:none;
+  }
+  .voice-toggle input{cursor:pointer;}
+</style>
+</head>
+<body>
+<div class="app-shell">
+  <header class="top">
+    <div class="brand">
+      <div class="mark">م</div>
+      <div>
+        <h1>نظام الاستقبال والطابور</h1>
+        <p>Reception Queue — prototype</p>
+      </div>
+    </div>
+    <nav class="views">
+      <button data-view="kiosk" class="active">شاشة الاستقبال</button>
+      <button data-view="staff">شاشة الموظف</button>
+      <button data-view="dashboard">لوحة العرض</button>
+    </nav>
+  </header>
+
+  <!-- ===== KIOSK / CHECK-IN VIEW ===== -->
+  <section class="view active" id="view-kiosk">
+    <div class="eyebrow">تسجيل زائر</div>
+    <h2 class="section-title">من تريد أن تقابل؟</h2>
+    <div class="kiosk-card">
+      <div class="field">
+        <label>اسم الزائر</label>
+        <input type="text" id="visitorName" placeholder="مثال: أحمد كريم">
+      </div>
+      <div class="field">
+        <label>اختر القسم</label>
+        <div class="dept-grid" id="deptGrid"></div>
+      </div>
+      <button class="btn-primary" id="checkinBtn">احجز دوري</button>
+      <div id="ticketResult"></div>
+    </div>
+  </section>
+
+  <!-- hidden receipt markup, only visible when printing -->
+  <div id="printArea">
+    <div class="p-small">نظام الاستقبال</div>
+    <div class="p-line"></div>
+    <div class="p-small">رقمك</div>
+    <div class="p-num" id="printNum">0</div>
+    <div class="p-line"></div>
+    <div class="p-small" id="printDept">القسم</div>
+    <div class="p-small" id="printName">الاسم</div>
+    <div class="p-small" id="printTime">الوقت</div>
+  </div>
+
+  <!-- ===== STAFF VIEW ===== -->
+  <section class="view" id="view-staff">
+    <div class="eyebrow">شاشة الموظف</div>
+    <h2 class="section-title">استدعاء الزبون التالي</h2>
+    <div class="staff-picker" id="staffPicker"></div>
+    <div class="staff-panel" id="staffPanel"></div>
+  </section>
+
+  <!-- ===== RECEPTION DASHBOARD ===== -->
+  <section class="view" id="view-dashboard">
+    <div class="eyebrow">لوحة الاستقبال المباشرة</div>
+    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;margin-bottom:22px;">
+      <h2 class="section-title" style="margin:0;">حالة الطابور لكل قسم</h2>
+      <label class="voice-toggle">
+        <input type="checkbox" id="voiceToggle" checked>
+        🔊 نطق الأرقام صوتيًا عند الاستدعاء
+      </label>
+    </div>
+    <div class="dash-grid" id="dashGrid"></div>
+  </section>
+
+  <div class="sync-note">تجربة أولية — البيانات تُخزّن محليًا وتتزامن بين علامات التبويب المفتوحة على نفس الجهاز (محاكاة لقاعدة بيانات مباشرة). لاحقًا سيتم ربطها بـ Firebase.</div>
+</div>
+
+<script>
+const STORAGE_KEY = 'reception_queue_state_v1';
+const DEPARTMENTS = [
+  { id: 'accounting', name: 'المحاسبة' },
+  { id: 'manager', name: 'المدير' },
+  { id: 'hr', name: 'الموارد البشرية' },
+  { id: 'support', name: 'الدعم الفني' }
+];
+
+function loadState(){
+  try{
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if(raw) return JSON.parse(raw);
+  }catch(e){}
+  return { tickets: [], nextNum: 1 };
+}
+function saveState(state){
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  render();
+}
+let state = loadState();
+
+window.addEventListener('storage', (e) => {
+  if(e.key === STORAGE_KEY){
+    state = loadState();
+    render();
+  }
+});
+
+// ---------- KIOSK ----------
+let selectedDept = null;
+const deptGrid = document.getElementById('deptGrid');
+DEPARTMENTS.forEach(d => {
+  const b = document.createElement('button');
+  b.className = 'dept-btn';
+  b.textContent = d.name;
+  b.dataset.dept = d.id;
+  b.onclick = () => {
+    selectedDept = d.id;
+    document.querySelectorAll('.dept-btn').forEach(x => x.classList.remove('selected'));
+    b.classList.add('selected');
+  };
+  deptGrid.appendChild(b);
+});
+
+document.getElementById('checkinBtn').onclick = () => {
+  const nameInput = document.getElementById('visitorName');
+  const name = nameInput.value.trim();
+  const resultBox = document.getElementById('ticketResult');
+  if(!name || !selectedDept){
+    resultBox.innerHTML = `<p style="color:#a94444;font-size:13px;margin-top:10px;">الرجاء إدخال الاسم واختيار القسم.</p>`;
+    return;
+  }
+  const ticket = {
+    id: 'tk_' + Date.now() + '_' + Math.random().toString(36).slice(2,7),
+    num: state.nextNum,
+    name,
+    dept: selectedDept,
+    status: 'waiting',
+    calledBy: null,
+    arrivalTime: Date.now()
+  };
+  state.tickets.push(ticket);
+  state.nextNum += 1;
+  saveState(state);
+
+  const deptName = DEPARTMENTS.find(d => d.id === selectedDept).name;
+  resultBox.innerHTML = `
+    <div class="ticket-result">
+      <div class="sub">رقمك في الطابور</div>
+      <div class="num">${ticket.num}</div>
+      <div class="sub">${name} — ${deptName}</div>
+    </div>`;
+  nameInput.value = '';
+  selectedDept = null;
+  document.querySelectorAll('.dept-btn').forEach(x => x.classList.remove('selected'));
+
+  printTicket(ticket, deptName);
+};
+
+// ---------- AUTO PRINT ----------
+function printTicket(ticket, deptName){
+  document.getElementById('printNum').textContent = ticket.num;
+  document.getElementById('printDept').textContent = 'القسم: ' + deptName;
+  document.getElementById('printName').textContent = 'الاسم: ' + ticket.name;
+  document.getElementById('printTime').textContent = new Date(ticket.arrivalTime).toLocaleTimeString('ar-IQ');
+  // slight delay lets the DOM update before the print snapshot is taken
+  setTimeout(() => window.print(), 150);
+}
+
+// ---------- VOICE ANNOUNCEMENTS ----------
+const announced = new Set(); // ticket ids already spoken this session
+function speakCall(ticket, deptName){
+  const toggle = document.getElementById('voiceToggle');
+  if(!toggle || !toggle.checked) return;
+  if(!('speechSynthesis' in window)) return;
+  const utter = new SpeechSynthesisUtterance(`الرقم ${ticket.num}، تفضل`);
+  utter.lang = 'ar-SA';
+  utter.rate = 0.9;
+  window.speechSynthesis.speak(utter);
+}
+function checkForNewAnnouncements(){
+  state.tickets.forEach(t => {
+    if(t.status === 'called' && !announced.has(t.id)){
+      announced.add(t.id);
+      const deptName = DEPARTMENTS.find(d => d.id === t.dept).name;
+      speakCall(t, deptName);
+    }
+  });
+}
+
+// ---------- STAFF ----------
+let activeStaffDept = DEPARTMENTS[0].id;
+const staffPicker = document.getElementById('staffPicker');
+DEPARTMENTS.forEach(d => {
+  const b = document.createElement('button');
+  b.textContent = d.name;
+  b.dataset.dept = d.id;
+  b.onclick = () => { activeStaffDept = d.id; render(); };
+  staffPicker.appendChild(b);
+});
+
+function renderStaffPanel(){
+  document.querySelectorAll('#staffPicker button').forEach(b => {
+    b.classList.toggle('active', b.dataset.dept === activeStaffDept);
+  });
+  const panel = document.getElementById('staffPanel');
+  const deptName = DEPARTMENTS.find(d => d.id === activeStaffDept).name;
+  const waiting = state.tickets.filter(t => t.dept === activeStaffDept && t.status === 'waiting')
+    .sort((a,b) => a.arrivalTime - b.arrivalTime);
+  const current = state.tickets.find(t => t.dept === activeStaffDept && t.status === 'called');
+
+  let html = `<h3>${deptName}</h3>`;
+
+  if(current){
+    html += `
+      <div class="current-visitor">
+        <div class="label">الزبون الحالي — رقم ${current.num}</div>
+        <div class="name">${current.name}</div>
+      </div>
+      <button class="done-btn" id="doneBtn">تم — إنهاء المقابلة</button>
+    `;
+  } else {
+    html += `
+      <div class="waiting-count">بانتظارك حاليًا: <b>${waiting.length}</b> شخص</div>
+      <button class="call-btn" id="callNextBtn" ${waiting.length === 0 ? 'disabled' : ''}>
+        ${waiting.length === 0 ? 'لا يوجد أحد بالانتظار' : 'استدعاء التالي ←'}
+      </button>
+    `;
+  }
+
+  panel.innerHTML = html;
+
+  const callBtn = document.getElementById('callNextBtn');
+  if(callBtn){
+    callBtn.onclick = () => {
+      const next = state.tickets.filter(t => t.dept === activeStaffDept && t.status === 'waiting')
+        .sort((a,b) => a.arrivalTime - b.arrivalTime)[0];
+      if(next){
+        next.status = 'called';
+        next.calledBy = deptName;
+        saveState(state);
+      }
+    };
+  }
+  const doneBtn = document.getElementById('doneBtn');
+  if(doneBtn){
+    doneBtn.onclick = () => {
+      current.status = 'done';
+      saveState(state);
+    };
+  }
+}
+
+// ---------- DASHBOARD ----------
+function timeAgo(ts){
+  const mins = Math.floor((Date.now() - ts) / 60000);
+  if(mins < 1) return 'الآن';
+  return `منذ ${mins} د`;
+}
+function renderDashboard(){
+  const grid = document.getElementById('dashGrid');
+  grid.innerHTML = '';
+  DEPARTMENTS.forEach(d => {
+    const deptTickets = state.tickets.filter(t => t.dept === d.id && t.status !== 'done');
+    const waiting = deptTickets.filter(t => t.status === 'waiting').sort((a,b)=>a.arrivalTime-b.arrivalTime);
+    const called = deptTickets.find(t => t.status === 'called');
+
+    const col = document.createElement('div');
+    col.className = 'dept-column';
+    col.innerHTML = `
+      <div class="col-head">
+        <h3>${d.name}</h3>
+        <span class="count">${waiting.length} بالانتظار</span>
+      </div>
+      <div class="now-serving">
+        ${called
+          ? `جارٍ الآن<b>#${called.num} — ${called.name}</b>`
+          : `<span style="opacity:.6">لا يوجد استدعاء حاليًا</span>`}
+      </div>
+      <ul class="ticket-list">
+        ${waiting.length === 0
+          ? `<li class="empty-msg" style="display:block;width:100%;">لا يوجد أحد بالطابور</li>`
+          : waiting.map(t => `
+            <li>
+              <div>
+                <div class="t-name">#${t.num} ${t.name}</div>
+                <div class="t-time">${timeAgo(t.arrivalTime)}</div>
+              </div>
+              <span class="status-pill waiting">بالانتظار</span>
+            </li>
+          `).join('')}
+      </ul>
+    `;
+    grid.appendChild(col);
+  });
+}
+
+// ---------- VIEW SWITCH ----------
+document.querySelectorAll('nav.views button').forEach(btn => {
+  btn.onclick = () => {
+    document.querySelectorAll('nav.views button').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+    document.getElementById('view-' + btn.dataset.view).classList.add('active');
+  };
+});
+
+function render(){
+  renderStaffPanel();
+  renderDashboard();
+  checkForNewAnnouncements();
+}
+render();
+setInterval(render, 15000); // refresh "time ago" labels
+</script>
+</body>
+</html>
