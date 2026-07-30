@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<title>ترحيل سجل التغييرات - أداة لمرة واحدة</title>
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-database-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-auth-compat.js"></script>
+<style>
+body{font-family:Tahoma,Arial,sans-serif;background:#0c1a30;color:#e2e8f0;padding:24px;max-width:720px;margin:0 auto}
+h1{font-size:1.2rem;color:#fff}
+.card{background:#13233f;border:1px solid #24365a;border-radius:10px;padding:16px;margin-bottom:14px}
+button{background:#2563eb;color:#fff;border:none;padding:10px 18px;border-radius:8px;font-size:0.95rem;cursor:pointer;margin-inline-end:8px}
+button:disabled{opacity:.5;cursor:not-allowed}
+button.danger{background:#dc2626}
+input{padding:9px 12px;border-radius:8px;border:1px solid #334155;background:#0c1a30;color:#fff;width:100%;box-sizing:border-box;margin-bottom:8px}
+pre{white-space:pre-wrap;background:#0c1a30;padding:12px;border-radius:8px;max-height:400px;overflow-y:auto;font-size:0.82rem;line-height:1.5}
+.ok{color:#4ade80}.warn{color:#fbbf24}.err{color:#f87171}
+</style>
+</head>
+<body>
+<h1>🧾 أداة ترحيل سجل التغييرات (لمرة واحدة)</h1>
+<div class="card">
+هذه الأداة تنقل أي سجلات كُتبت بالخطأ في المسار القديم <code>users/{owner}/activityLogs</code>
+إلى المسار الصحيح <code>activityLogs/{owner}</code> الذي تقرأ منه لوحة التحكم، ثم تحذف النسخة القديمة بعد التأكد من نجاح النقل.
+</div>
+
+<div class="card">
+<div>البريد الإلكتروني (حساب المشرف):</div>
+<input id="email" type="email" placeholder="admin@example.com">
+<div>كلمة المرور:</div>
+<input id="password" type="password" placeholder="••••••••">
+<button id="loginBtn" onclick="doLogin()">تسجيل الدخول</button>
+<div id="loginStatus" style="margin-top:8px"></div>
+</div>
+
+<div class="card" id="scanCard" style="display:none">
+<button id="scanBtn" onclick="scanStrayLogs()">1️⃣ فحص السجلات القديمة</button>
+<div id="scanStatus" style="margin-top:8px"></div>
+</div>
+
+<div class="card" id="migrateCard" style="display:none">
+<button id="migrateBtn" class="danger" onclick="runMigration()">2️⃣ نقل ودمج السجلات الآن</button>
+<div id="migrateStatus" style="margin-top:8px"></div>
+</div>
+
+<div class="card">
+<div style="margin-bottom:8px;color:#94a3b8">السجل:</div>
+<pre id="log">جاهز...</pre>
+</div>
+
+<script>
+const firebaseConfig = {
+apiKey: "AIzaSyA1q9LiS6EXNCBFmFvytyN-p4KKgP9wym4",
+authDomain: "prime-e-8eb80.firebaseapp.com",
+databaseURL: "https://prime-e-8eb80-default-rtdb.firebaseio.com",
+projectId: "prime-e-8eb80",
+storageBucket: "prime-e-8eb80.firebasestorage.app",
+messagingSenderId: "671376930301",
+appId: "1:671376930301:web:f8b61666314f3149fb5594"
+};
+firebase.initializeApp(firebaseConfig);
+const fbDB = firebase.database();
+const fbAuth = firebase.auth();
+
+function log(msg, cls){
+const el = document.getElementById('log');
+const line = document.createElement('div');
+if (cls) line.className = cls;
+line.textContent = msg;
+el.appendChild(line);
+el.scrollTop = el.scrollHeight;
+}
+
+let strayData = null; // { ownerUid: { pushKey: entryObj, ... }, ... }
+
+window.addEventListener('error', function(e){
+log('خطأ في الصفحة: ' + (e.message || e), 'err');
+document.getElementById('loginBtn').disabled = false;
+});
+
+function doLogin(){
+const email = document.getElementById('email').value.trim();
+const password = document.getElementById('password').value;
+if (!email || !password){ document.getElementById('loginStatus').innerHTML = '<span class="err">أدخل البريد وكلمة المرور</span>'; return; }
+document.getElementById('loginBtn').disabled = true;
+document.getElementById('loginStatus').textContent = 'جارٍ تسجيل الدخول...';
+log('محاولة تسجيل الدخول عبر Firebase...');
+
+let settled = false;
+const timeoutId = setTimeout(() => {
+if (!settled) {
+document.getElementById('loginStatus').innerHTML = '<span class="err">لم يستجب Firebase خلال 10 ثوانٍ. على الأغلب أن الصفحة مفتوحة كملف محلي (file://) وليست مرفوعة على mutabaa.online — مفتاح Firebase مقيّد بالدومين. ارفع هذا الملف إلى نفس مستودع GitHub Pages وافتحه من mutabaa.online.</span>';
+document.getElementById('loginBtn').disabled = false;
+log('انتهت المهلة — تحقق من أنك تفتح الصفحة من mutabaa.online وليس كملف محلي.', 'err');
+}
+}, 10000);
+
+fbAuth.signInWithEmailAndPassword(email, password).then(cred => {
+settled = true; clearTimeout(timeoutId);
+document.getElementById('loginStatus').innerHTML = '<span class="ok">تم تسجيل الدخول: ' + cred.user.email + '</span>';
+document.getElementById('scanCard').style.display = 'block';
+log('تم تسجيل الدخول بنجاح.', 'ok');
+}).catch(err => {
+settled = true; clearTimeout(timeoutId);
+document.getElementById('loginStatus').innerHTML = '<span class="err">خطأ (' + err.code + '): ' + err.message + '</span>';
+document.getElementById('loginBtn').disabled = false;
+log('فشل تسجيل الدخول: [' + err.code + '] ' + err.message, 'err');
+});
+}
+
+function scanStrayLogs(){
+document.getElementById('scanBtn').disabled = true;
+document.getElementById('scanStatus').textContent = 'جارٍ الفحص...';
+log('جارٍ فحص users/*/activityLogs بحثاً عن سجلات ضائعة...');
+
+fbDB.ref('users').once('value').then(usersSnap => {
+strayData = {};
+let totalStray = 0;
+let ownersWithStray = 0;
+
+usersSnap.forEach(userChild => {
+const ownerUid = userChild.key;
+const activityLogs = userChild.child('activityLogs');
+if (activityLogs.exists()) {
+const entries = {};
+let count = 0;
+activityLogs.forEach(entryChild => {
+entries[entryChild.key] = entryChild.val();
+count++;
+});
+if (count > 0) {
+strayData[ownerUid] = entries;
+totalStray += count;
+ownersWithStray++;
+log(`وجدت ${count} سجل ضائع تحت users/${ownerUid}/activityLogs`, 'warn');
+}
+}
+});
+
+if (totalStray === 0) {
+document.getElementById('scanStatus').innerHTML = '<span class="ok">لا توجد سجلات ضائعة. كل شيء في مكانه الصحيح ✅</span>';
+log('لم يتم العثور على أي سجلات في المسار القديم. لا حاجة للترحيل.', 'ok');
+} else {
+document.getElementById('scanStatus').innerHTML =
+`<span class="warn">تم العثور على ${totalStray} سجل ضائع عبر ${ownersWithStray} حساب/مساحة عمل.</span>`;
+log(`الإجمالي: ${totalStray} سجل عبر ${ownersWithStray} مساحة عمل. اضغط "نقل ودمج" للمتابعة.`, 'warn');
+document.getElementById('migrateCard').style.display = 'block';
+}
+document.getElementById('scanBtn').disabled = false;
+}).catch(err => {
+document.getElementById('scanStatus').innerHTML = '<span class="err">خطأ أثناء الفحص: ' + err.message + '</span>';
+log('خطأ أثناء الفحص: ' + err.message, 'err');
+document.getElementById('scanBtn').disabled = false;
+});
+}
+
+function runMigration(){
+if (!strayData || Object.keys(strayData).length === 0){
+log('لا توجد بيانات للترحيل. قم بالفحص أولاً.', 'err');
+return;
+}
+document.getElementById('migrateBtn').disabled = true;
+document.getElementById('migrateStatus').textContent = 'جارٍ النقل...';
+log('بدء عملية النقل والدمج...');
+
+const owners = Object.keys(strayData);
+let ownersDone = 0;
+
+function processOwner(idx){
+if (idx >= owners.length){
+document.getElementById('migrateStatus').innerHTML = '<span class="ok">اكتمل الترحيل لجميع الحسابات ✅</span>';
+log('اكتملت عملية الترحيل بنجاح لجميع مساحات العمل.', 'ok');
+document.getElementById('migrateBtn').disabled = false;
+return;
+}
+
+const ownerUid = owners[idx];
+const entries = strayData[ownerUid];
+const targetRef = fbDB.ref('activityLogs/' + ownerUid);
+
+// Push each stray entry into the correct target path (push() generates new unique keys,
+// so no collision/overwrite risk even if some entries already exist there).
+const pushPromises = Object.values(entries).map(entry => targetRef.push(entry));
+
+Promise.all(pushPromises).then(() => {
+log(`✔ تم نقل ${pushPromises.length} سجل إلى activityLogs/${ownerUid}`, 'ok');
+// Now delete the old stray node for this owner
+return fbDB.ref('users/' + ownerUid + '/activityLogs').remove();
+}).then(() => {
+log(`🗑 تم حذف المسار القديم users/${ownerUid}/activityLogs`, 'ok');
+ownersDone++;
+processOwner(idx + 1);
+}).catch(err => {
+log(`✖ خطأ في معالجة ${ownerUid}: ${err.message}`, 'err');
+processOwner(idx + 1);
+});
+}
+
+processOwner(0);
+}
+</script>
+</body>
+</html>
