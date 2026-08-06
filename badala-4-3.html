@@ -1,0 +1,547 @@
+<!--
+نظام إدارة البدالات — Mutabaa
+يمنع فتح نفس البدالة من قبل أكثر من موظف بنفس الوقت.
+تصميم وتطوير أحمد ماجد سجاد — Date: August 2026
+-->
+<!DOCTYPE html>
+<html dir="rtl" lang="ar">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
+<title>نظام البدالة — Mutabaa</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800;900&display=swap" rel="stylesheet">
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-database-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-auth-compat.js"></script>
+<script>
+  const firebaseConfig = {
+    apiKey: "AIzaSyA1q9LiS6EXNCBFmFvytyN-p4KKgP9wym4",
+    authDomain: "prime-e-8eb80.firebaseapp.com",
+    databaseURL: "https://prime-e-8eb80-default-rtdb.firebaseio.com",
+    projectId: "prime-e-8eb80",
+    storageBucket: "prime-e-8eb80.firebasestorage.app",
+    messagingSenderId: "671376930301",
+    appId: "1:671376930301:web:f8b61666314f3149fb5594"
+  };
+  firebase.initializeApp(firebaseConfig);
+  const fbDB = firebase.database();
+  const fbAuth = firebase.auth();
+</script>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: 'Tajawal','Segoe UI',Tahoma,Arial,sans-serif;
+  background: #eef2f7; color: #1e293b; direction: rtl; min-height: 100vh;
+}
+.wrap { max-width: 980px; margin: 0 auto; padding: 22px 16px 60px; }
+
+.my-line-card {
+  display: none; background: #ffffff; border: 2px solid #2b8ce8; border-radius: 16px;
+  padding: 18px 22px; margin-bottom: 22px; box-shadow: 0 6px 18px rgba(15,39,68,0.1);
+  align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px;
+}
+.my-line-card.show { display: flex; }
+.my-line-info { font-size: 0.95rem; }
+.my-line-info b { color: #0b1f3a; font-size: 1.25rem; }
+.my-line-timer { color: #5c6c85; font-size: 0.82rem; margin-top: 3px; }
+.btn-release {
+  background: #dc2626; color: #fff; border: none; padding: 10px 22px; border-radius: 10px;
+  font-family: inherit; font-weight: 700; font-size: 0.9rem; cursor: pointer;
+}
+.btn-release:hover { background: #b91c1c; }
+
+.toolbar { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; flex-wrap: wrap; gap: 10px; }
+.toolbar h2 { font-size: 1.05rem; color: #0b1f3a; }
+.btn-add {
+  background: #1d3f8f; color: #fff; border: none; padding: 8px 16px; border-radius: 9px;
+  font-family: inherit; font-weight: 700; font-size: 0.82rem; cursor: pointer;
+}
+
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 14px; }
+.line-card {
+  background: #ffffff; border-radius: 14px; padding: 16px 18px; box-shadow: 0 3px 10px rgba(15,39,68,0.08);
+  border-right: 5px solid #22c55e; transition: transform 0.15s ease;
+}
+.line-card.busy { border-right-color: #ef4444; }
+.line-card.mine { border-right-color: #2b8ce8; background: #f0f7ff; }
+.line-num { font-size: 1.4rem; font-weight: 900; color: #0b1f3a; margin-bottom: 4px; }
+.line-status { font-size: 0.82rem; font-weight: 700; margin-bottom: 8px; }
+.line-status.free { color: #16a34a; }
+.line-status.busy { color: #dc2626; }
+.line-holder { font-size: 0.8rem; color: #5c6c85; margin-bottom: 2px; }
+.line-since { font-size: 0.76rem; color: #94a3b8; margin-bottom: 10px; }
+.line-creds {
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap; direction: ltr; text-align: center;
+  background: #f3f6fb; border-radius: 8px; padding: 6px 10px; font-size: 0.76rem; color: #46536b;
+  margin-bottom: 10px;
+}
+.line-creds button {
+  border: none; background: #eaf2fc; color: #1d4ed8; border-radius: 6px; padding: 3px 8px;
+  cursor: pointer; font-family: inherit; font-size: 0.74rem; font-weight: 700;
+}
+.line-actions { display: flex; gap: 8px; }
+.btn-open {
+  background: #16a34a; color: #fff; border: none; padding: 7px 16px; border-radius: 8px;
+  font-family: inherit; font-weight: 700; font-size: 0.8rem; cursor: pointer; flex: 1;
+}
+.btn-open:disabled { background: #cbd5e1; cursor: not-allowed; }
+.btn-force {
+  background: #f3f6fb; color: #dc2626; border: 1.5px solid #fecaca; padding: 7px 12px; border-radius: 8px;
+  font-family: inherit; font-weight: 700; font-size: 0.78rem; cursor: pointer;
+}
+.empty-hint { text-align: center; color: #94a3b8; padding: 40px 10px; font-size: 0.9rem; }
+
+.modal-bg { display: none; position: fixed; inset: 0; background: rgba(15,23,42,0.5); z-index: 999; align-items: center; justify-content: center; }
+.modal-bg.show { display: flex; }
+.modal-box { background: #fff; border-radius: 16px; padding: 24px; width: 90%; max-width: 340px; }
+.modal-box h3 { font-size: 1rem; margin-bottom: 14px; color: #0b1f3a; }
+.modal-box input {
+  width: 100%; padding: 10px 12px; border: 1.5px solid #dfe6f0; border-radius: 9px; font-family: inherit;
+  font-size: 0.95rem; margin-bottom: 14px; direction: ltr; text-align: center;
+}
+.modal-actions { display: flex; gap: 8px; }
+.modal-actions button { flex: 1; padding: 10px; border: none; border-radius: 9px; font-family: inherit; font-weight: 700; cursor: pointer; }
+.modal-cancel { background: #f3f6fb; color: #5c6c85; }
+.modal-confirm { background: #1d3f8f; color: #fff; }
+
+/* Global status banner (shown to everyone when status != available) */
+.status-banner {
+  display: none; border-radius: 14px; padding: 14px 18px; margin-bottom: 18px;
+  font-weight: 700; font-size: 0.92rem; align-items: center; gap: 10px;
+}
+.status-banner.show { display: flex; }
+.status-banner.warn { background: #fff7e6; border: 2px solid #f5a524; color: #92650a; }
+.status-banner.danger { background: #fdecec; border: 2px solid #ef4444; color: #a11414; }
+
+/* Full block screen for regular employees when service is unavailable */
+.locked-screen {
+  display: none; flex-direction: column; align-items: center; justify-content: center;
+  text-align: center; padding: 70px 20px; gap: 10px;
+}
+.locked-screen.show { display: flex; }
+.locked-icon { font-size: 3rem; }
+.locked-title { font-size: 1.2rem; font-weight: 800; color: #0b1f3a; }
+.locked-sub { color: #5c6c85; font-size: 0.9rem; max-width: 380px; }
+</style>
+</head>
+<body>
+
+<div class="wrap">
+
+  <div id="statusBanner" class="status-banner">
+    <span id="statusBannerIcon">⚠️</span>
+    <span id="statusBannerText"></span>
+  </div>
+
+  <div id="lockedScreen" class="locked-screen">
+    <div class="locked-icon" id="lockedIcon">🚫</div>
+    <div class="locked-title" id="lockedTitle">نظام البدالة غير متاح حالياً</div>
+    <div class="locked-sub" id="lockedSub">الرجاء التواصل مع المشرف لمزيد من المعلومات.</div>
+  </div>
+
+  <div id="mainContent">
+    <div id="myLineCard" class="my-line-card">
+      <div class="my-line-info">
+        بدالتك الحالية: <b id="myLineNum"></b>
+        <div class="my-line-timer" id="myLineTimer"></div>
+      </div>
+      <button class="btn-release" onclick="releaseMyLine()">🔒 إغلاق البدالة</button>
+    </div>
+
+    <div class="toolbar">
+      <h2>البدالات المتاحة</h2>
+      <button id="addLineBtn" class="btn-add" style="display:none" onclick="openAddLineModal()">+ إضافة بدالة جديدة</button>
+    </div>
+
+    <div id="linesGrid" class="grid">
+      <div class="empty-hint">جارِ التحميل...</div>
+    </div>
+  </div>
+
+</div>
+
+<div id="addLineModal" class="modal-bg">
+  <div class="modal-box">
+    <h3>إضافة بدالة جديدة</h3>
+    <input id="newLineInput" type="text" placeholder="مثال: 405" inputmode="numeric">
+    <div class="modal-actions">
+      <button class="modal-cancel" onclick="closeAddLineModal()">إلغاء</button>
+      <button class="modal-confirm" onclick="confirmAddLine()">إضافة</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ═══ Read context passed in from the parent (login-2-1-4.html iframe) ═══
+const params = new URLSearchParams(window.location.search);
+const myDisplayName = params.get('userName') || 'موظف';
+const workspaceOwner = params.get('workspaceOwner') || '';
+// Never silently fall back to a fake owner id like 'default' — that just
+// turns a real bug (stale iframe from a previous login, or a missing
+// param) into a confusing PERMISSION_DENIED with no clue why. Fail loudly
+// instead so it's obvious what's wrong.
+if (!workspaceOwner) {
+  document.body.innerHTML = '<div style="padding:60px 20px;text-align:center;font-family:Tajawal,sans-serif;color:#a11414">' +
+    '⚠️ تعذّر تحديد مساحة العمل (workspaceOwner). الرجاء إغلاق هذه الصفحة والدخول من جديد.<br>' +
+    '<span style="font-size:0.8rem;color:#5c6c85">إذا استمرت المشكلة بعد إعادة تسجيل الدخول، تواصل مع المطوّر.</span></div>';
+  throw new Error('badala.html loaded without a workspaceOwner param');
+}
+// isAdmin / isManager control who can force-release a stuck line and add
+// new line numbers. Passed as ?isAdmin=1&isManager=1 from the parent, which
+// already knows the logged-in user's role/permissions.
+const isAdmin = params.get('isAdmin') === '1';
+const isManager = params.get('isManager') === '1';
+const canManageLines = isAdmin || isManager;
+
+document.getElementById('addLineBtn').style.display = canManageLines ? '' : 'none';
+
+// ═══ Firebase paths ═══
+// badalaLines/{workspaceOwner}/{lineNumber} = { status, employeeName, since, lastActive }
+// badalaConfig/{workspaceOwner}/lines = { "405": true, "229": true, ... }  (registry of known line numbers)
+// badalaConfig/{workspaceOwner}/status = 'available' | 'outOfService' | 'noCredit'  (set from لوحة المشرف)
+// These are only created once Firebase Auth confirms who's signed in below —
+// every database rule requires auth != null, so touching fbDB before auth
+// resolves always fails with PERMISSION_DENIED, no matter who's logged in.
+let linesRef, configRef, globalStatusRef, credsRef;
+
+let currentLines = {};   // live status data
+let currentCreds = {};   // { lineNumber: { username, password } }
+let knownLineNumbers = []; // registry of line numbers, sorted
+let myClaimedLine = null;
+let myTimerInterval = null;
+let globalStatus = 'available';
+
+// If the connection drops (tab minimized/backgrounded, phone locked, brief
+// network loss, app switched away from) we do NOT free the line right away —
+// that used to release it the instant the browser was minimized, kicking
+// the employee off for no real reason. Instead we mark the disconnect time
+// and only actually free the line once this much time has passed with no
+// reconnect. Any connected client (this one once it comes back, or anyone
+// else with the page open) performs the cleanup once the grace period is up.
+const RELEASE_GRACE_MS = 20 * 60 * 1000; // 20 minutes
+
+const GLOBAL_STATUS_INFO = {
+  available:   { icon: '🟢', label: 'متاحة',        bannerText: null },
+  outOfService:{ icon: '🛠️', label: 'خارج الخدمة',   bannerText: 'نظام البدالة خارج الخدمة حالياً. الرجاء الانتظار حتى يُعاد تفعيله من قبل المشرف.', lockedTitle: 'البدالة خارج الخدمة', lockedIcon: '🛠️' },
+  noCredit:    { icon: '💳', label: 'لا يوجد رصيد',  bannerText: 'لا يوجد رصيد كافٍ لتشغيل نظام البدالة حالياً. الرجاء التواصل مع المشرف.', lockedTitle: 'لا يوجد رصيد كافٍ', lockedIcon: '💳' }
+};
+
+// ═══ Wait for Firebase Auth before touching the database ═══
+// This page is loaded in an iframe from login.html on the same origin, so
+// it picks up the already-signed-in session automatically once firebase.auth()
+// is initialized — no separate sign-in call needed here. We just have to
+// wait for onAuthStateChanged to fire before creating any refs/listeners.
+function showLoadError(context, err) {
+  console.error('Badala error [' + context + ']:', err);
+  const grid = document.getElementById('linesGrid');
+  if (grid) {
+    grid.innerHTML = '<div class="empty-hint">⚠️ تعذّر تحميل بيانات البدالة (' + (err && err.code ? err.code : 'خطأ') + ').<br>الرجاء التأكد من قواعد Firebase أو التواصل مع المشرف.</div>';
+  }
+}
+
+fbAuth.onAuthStateChanged(function(user) {
+  if (!user) {
+    showLoadError('auth', { code: 'not-signed-in' });
+    return;
+  }
+
+  linesRef = fbDB.ref('badalaLines/' + workspaceOwner);
+  configRef = fbDB.ref('badalaConfig/' + workspaceOwner + '/lines');
+  globalStatusRef = fbDB.ref('badalaConfig/' + workspaceOwner + '/status');
+  credsRef = fbDB.ref('badalaConfig/' + workspaceOwner + '/creds');
+
+  // ═══ Live listeners ═══
+  // Each listener has an error callback — without one, a Firebase
+  // "permission_denied" fails completely silently and the grid is left
+  // stuck on "جارِ التحميل..." forever with no clue why.
+  globalStatusRef.on('value', snap => {
+    globalStatus = snap.val() || 'available';
+    applyGlobalStatus();
+  }, err => showLoadError('globalStatus', err));
+
+  configRef.on('value', snap => {
+    const val = snap.val() || {};
+    knownLineNumbers = Object.keys(val).sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+    render();
+  }, err => showLoadError('config', err));
+
+  credsRef.on('value', snap => {
+    currentCreds = snap.val() || {};
+    render();
+  }, err => showLoadError('creds', err));
+
+  linesRef.on('value', snap => {
+    currentLines = snap.val() || {};
+    render();
+    // Always resync which line (if any) is mine straight from server data,
+    // instead of trusting the local variable. The parent shell (login.html)
+    // loads this iframe once and just shows/hides it afterwards rather than
+    // reloading it every time — so relying on local state alone meant that
+    // leaving and reopening the البدالة screen could leave every "فتح
+    // البدالة" button stuck disabled (or a released line stuck looking
+    // claimed) until a full page refresh. Recomputing this on every update
+    // keeps it correct no matter how the screen was shown, hidden, or
+    // reconnected.
+    resyncMyClaimedLine();
+    cleanupStaleDisconnectedLines();
+  }, err => showLoadError('lines', err));
+
+  // ═══ Reconnect handling ═══
+  // Firebase's special '.info/connected' path flips to false while offline
+  // (tab minimized/backgrounded, phone locked, brief network loss) and back
+  // to true once reconnected. Every time we reconnect while still holding a
+  // line, clear any pending disconnect mark and re-arm the onDisconnect
+  // handler (onDisconnect handlers are consumed once and must be
+  // re-registered after every reconnect, otherwise the next real disconnect
+  // wouldn't be caught at all).
+  fbDB.ref('.info/connected').on('value', snap => {
+    if (snap.val() === true && myClaimedLine) {
+      linesRef.child(myClaimedLine).update({ disconnectedAt: null });
+      armDisconnectHandler(myClaimedLine);
+    }
+  });
+});
+
+function armDisconnectHandler(num) {
+  linesRef.child(num).onDisconnect().update({ disconnectedAt: firebase.database.ServerValue.TIMESTAMP });
+}
+
+// Recomputes myClaimedLine directly from server truth (which line, if any,
+// is currently marked busy under my name) instead of trusting whatever the
+// local variable happened to be left at. Safe to call as often as we like.
+function resyncMyClaimedLine() {
+  let serverLine = null;
+  Object.keys(currentLines).forEach(num => {
+    const info = currentLines[num];
+    if (info && info.status === 'busy' && info.employeeName === myDisplayName) serverLine = num;
+  });
+  if (serverLine !== myClaimedLine) {
+    myClaimedLine = serverLine;
+    updateMyLineCard();
+  }
+  if (myClaimedLine) {
+    // Re-arm in case this JS context never registered it (e.g. the line was
+    // claimed in an earlier session/tab and this is a fresh page load).
+    armDisconnectHandler(myClaimedLine);
+  }
+}
+
+// Sweep pass: any busy line whose disconnectedAt is older than the grace
+// period gets freed. Runs on every data update, so whichever client (mine
+// once I'm back, a coworker's, or an admin's) happens to be connected when
+// the grace period lapses is the one that performs the cleanup.
+function cleanupStaleDisconnectedLines() {
+  Object.keys(currentLines).forEach(num => {
+    const info = currentLines[num];
+    if (info && info.status === 'busy' && info.disconnectedAt && (Date.now() - info.disconnectedAt) >= RELEASE_GRACE_MS) {
+      linesRef.child(num).update({ status: 'free', employeeName: null, since: null, lastActive: null, disconnectedAt: null });
+    }
+  });
+}
+
+// ═══ Global status gate ═══
+// Admins/managers can still see the lines grid (so they can monitor usage
+// and manage lines) even when the service is marked unavailable, but they
+// see a warning banner. Regular employees are fully blocked from claiming
+// or viewing lines and instead see a clear "unavailable" screen — this is
+// controlled from لوحة المشرف > البدالة.
+function applyGlobalStatus() {
+  const banner = document.getElementById('statusBanner');
+  const lockedScreen = document.getElementById('lockedScreen');
+  const mainContent = document.getElementById('mainContent');
+  const info = GLOBAL_STATUS_INFO[globalStatus] || GLOBAL_STATUS_INFO.available;
+
+  if (globalStatus === 'available') {
+    banner.classList.remove('show');
+    lockedScreen.classList.remove('show');
+    mainContent.style.display = '';
+    return;
+  }
+
+  if (canManageLines) {
+    // Admin/manager: keep the grid visible, just warn them.
+    banner.className = 'status-banner show ' + (globalStatus === 'noCredit' ? 'danger' : 'warn');
+    document.getElementById('statusBannerIcon').textContent = info.icon;
+    document.getElementById('statusBannerText').textContent = 'حالة النظام حالياً: ' + info.label + ' — الموظفون لا يمكنهم فتح بدالات جديدة الآن. يمكنك تغيير الحالة من لوحة المشرف.';
+    lockedScreen.classList.remove('show');
+    mainContent.style.display = '';
+  } else {
+    // Regular employee: fully blocked.
+    banner.classList.remove('show');
+    mainContent.style.display = 'none';
+    document.getElementById('lockedIcon').textContent = info.lockedIcon;
+    document.getElementById('lockedTitle').textContent = info.lockedTitle;
+    document.getElementById('lockedSub').textContent = info.bannerText;
+    lockedScreen.classList.add('show');
+  }
+}
+
+// ═══ Rendering ═══
+function timeAgo(ts) {
+  if (!ts) return '';
+  const diffMin = Math.max(0, Math.round((Date.now() - ts) / 60000));
+  if (diffMin < 1) return 'الآن';
+  if (diffMin < 60) return 'منذ ' + diffMin + ' دقيقة';
+  const h = Math.floor(diffMin / 60);
+  const m = diffMin % 60;
+  return 'منذ ' + h + ' ساعة' + (m ? ' و' + m + ' دقيقة' : '');
+}
+
+function render() {
+  const grid = document.getElementById('linesGrid');
+  if (knownLineNumbers.length === 0) {
+    grid.innerHTML = '<div class="empty-hint">لا توجد بدالات مضافة بعد.' + (canManageLines ? ' اضغط "إضافة بدالة جديدة" للبدء.' : ' الرجاء التواصل مع المشرف.') + '</div>';
+    return;
+  }
+  grid.innerHTML = knownLineNumbers.map(num => {
+    const info = currentLines[num];
+    const busy = info && info.status === 'busy';
+    const mine = busy && info.employeeName === myDisplayName;
+    const cls = mine ? 'mine' : (busy ? 'busy' : '');
+    let holderHtml = '';
+    let sinceHtml = '';
+    let actionsHtml = '';
+    if (busy) {
+      const disconnectedNote = info.disconnectedAt ? ' — ⏳ انقطع الاتصال، سيتم تحريرها تلقائياً بعد قليل إن لم يرجع' : '';
+      holderHtml = `<div class="line-holder">👤 ${escapeHtml(info.employeeName)}${disconnectedNote}</div>`;
+      sinceHtml = `<div class="line-since">${timeAgo(info.since)}</div>`;
+      if (mine) {
+        actionsHtml = `<button class="btn-open" disabled>بدالتك الحالية</button>`;
+      } else {
+        actionsHtml = `<button class="btn-open" disabled>مستخدم حالياً</button>` +
+          (canManageLines ? `<button class="btn-force" onclick="forceRelease('${num}')">تحرير</button>` : '');
+      }
+    } else {
+      holderHtml = `<div class="line-holder">&nbsp;</div>`;
+      sinceHtml = `<div class="line-since">&nbsp;</div>`;
+      actionsHtml = `<button class="btn-open" ${myClaimedLine ? 'disabled' : ''} onclick="claimLine('${num}')">فتح البدالة</button>`;
+    }
+    return `<div class="line-card ${cls}">
+      <div class="line-num">${escapeHtml(num)}</div>
+      <div class="line-status ${busy ? 'busy' : 'free'}">${busy ? '🔴 مستخدمة' : '🟢 متاحة'}</div>
+      ${holderHtml}
+      ${sinceHtml}
+      ${credsHtml(num)}
+      <div class="line-actions">${actionsHtml}</div>
+    </div>`;
+  }).join('');
+}
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
+}
+
+function credsHtml(num) {
+  const creds = currentCreds[num] || {};
+  if (!creds.username && !creds.password) return '';
+  return `<div class="line-creds">
+<span>👤 ${escapeHtml(creds.username || '—')}</span>
+${creds.username ? `<button type="button" onclick="copyLineField('${num}','username')" title="نسخ اسم المستخدم">📋</button>` : ''}
+<span>🔑 ${escapeHtml(creds.password || '—')}</span>
+${creds.password ? `<button type="button" onclick="copyLineField('${num}','password')" title="نسخ كلمة المرور">📋</button>` : ''}
+</div>`;
+}
+
+function copyLineField(num, field) {
+  const value = (currentCreds[num] || {})[field] || '';
+  if (!value) return;
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(value).catch(() => alert(value));
+  } else {
+    alert(value);
+  }
+}
+
+// ═══ Claim / release a line ═══
+function claimLine(num) {
+  if (globalStatus !== 'available') {
+    const info = GLOBAL_STATUS_INFO[globalStatus] || {};
+    alert('🚫 نظام البدالة غير متاح حالياً (' + (info.label || globalStatus) + '). الرجاء التواصل مع المشرف.');
+    return;
+  }
+  if (myClaimedLine) { alert('🚫 لديك بدالة مفتوحة بالفعل، أغلقها أولاً.'); return; }
+  const lineRef = linesRef.child(num);
+  // Use a transaction so two simultaneous clicks can't both "win" the same line.
+  lineRef.transaction(current => {
+    if (current && current.status === 'busy') return; // abort — already taken
+    return { status: 'busy', employeeName: myDisplayName, since: firebase.database.ServerValue.TIMESTAMP, lastActive: firebase.database.ServerValue.TIMESTAMP };
+  }, (error, committed) => {
+    if (error) { alert('حدث خطأ، حاول مرة أخرى.'); return; }
+    if (!committed) { alert('⚠️ تم فتح هذه البدالة للتو من قبل موظف آخر. اختر بدالة أخرى.'); return; }
+    myClaimedLine = num;
+    // If the connection drops, don't free the line immediately — just mark
+    // when it dropped, so a brief disconnect (minimized browser, locked
+    // phone) doesn't kick the employee off. See cleanupStaleDisconnectedLines().
+    armDisconnectHandler(num);
+    updateMyLineCard();
+  });
+}
+
+function releaseMyLine() {
+  if (!myClaimedLine) return;
+  const num = myClaimedLine;
+  linesRef.child(num).onDisconnect().cancel();
+  linesRef.child(num).update({ status: 'free', employeeName: null, since: null, lastActive: null, disconnectedAt: null });
+  myClaimedLine = null;
+  updateMyLineCard();
+}
+
+function forceRelease(num) {
+  if (!canManageLines) return;
+  const info = currentLines[num];
+  const who = info ? info.employeeName : '';
+  if (!confirm(`تحرير البدالة ${num} من "${who}"؟ سيتمكن أي موظف من فتحها بعد ذلك.`)) return;
+  linesRef.child(num).update({ status: 'free', employeeName: null, since: null, lastActive: null, disconnectedAt: null });
+}
+
+function updateMyLineCard() {
+  const card = document.getElementById('myLineCard');
+  if (myTimerInterval) { clearInterval(myTimerInterval); myTimerInterval = null; }
+  if (!myClaimedLine) { card.classList.remove('show'); return; }
+  card.classList.add('show');
+  document.getElementById('myLineNum').textContent = myClaimedLine;
+  const info = currentLines[myClaimedLine];
+  const since = info ? info.since : Date.now();
+  const tick = () => { document.getElementById('myLineTimer').textContent = 'مفتوح ' + timeAgo(since).replace('منذ', 'منذ'); };
+  tick();
+  myTimerInterval = setInterval(tick, 30000);
+}
+
+// ═══ Heartbeat so admins can tell a "busy" line is still actively in use
+// (not required for correctness — onDisconnect already handles cleanup —
+// but useful context if you later want a staleness warning). ═══
+setInterval(() => {
+  if (myClaimedLine) linesRef.child(myClaimedLine).child('lastActive').set(firebase.database.ServerValue.TIMESTAMP);
+}, 60000);
+
+// ═══ Add-line modal (admin/manager only) ═══
+function openAddLineModal() {
+  document.getElementById('newLineInput').value = '';
+  document.getElementById('addLineModal').classList.add('show');
+}
+function closeAddLineModal() {
+  document.getElementById('addLineModal').classList.remove('show');
+}
+function confirmAddLine() {
+  const val = document.getElementById('newLineInput').value.trim();
+  if (!val) return;
+  if (knownLineNumbers.includes(val)) { alert('⚠️ هذه البدالة مضافة بالفعل.'); return; }
+  configRef.child(val).set(true);
+  closeAddLineModal();
+}
+
+// Release my line automatically if this tab is closed properly (in addition
+// to the onDisconnect() safety net, which covers crashes/network loss).
+window.addEventListener('beforeunload', () => {
+  if (myClaimedLine) {
+    linesRef.child(myClaimedLine).update({ status: 'free', employeeName: null, since: null, lastActive: null, disconnectedAt: null });
+  }
+});
+</script>
+</body>
+</html>
