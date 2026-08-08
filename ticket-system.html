@@ -1,0 +1,812 @@
+<!--
+نظام التذاكر — Mutabaa
+تذاكر بين الأقسام: الأقسام تطلب من بعضها معلومات (تسجيل مكالمة، صورة، صوت...)
+بدل ضياعها برسائل واتساب.
+مرفقات الصور والصوت تُخزَّن على Cloudflare R2 عبر Worker وسيط، وتُحذف
+تلقائياً بعد 48 ساعة (قاعدة انتهاء صلاحية على مستوى الـ bucket).
+Firebase Realtime Database يخزّن فقط: التذاكر، الرسائل النصية، وروابط الملفات.
+
+© 2026 أحمد ماجد سجاد — 18 June 2026. جميع الحقوق محفوظة.
+-->
+<!DOCTYPE html>
+<html dir="rtl" lang="ar">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>نظام التذاكر — Mutabaa</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800&display=swap" rel="stylesheet">
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-database-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-auth-compat.js"></script>
+<style>
+  * { box-sizing: border-box; }
+  body { margin:0; font-family:'Tajawal','Segoe UI',Tahoma,Arial,sans-serif; background:#f3f6fa; color:#1e293b; }
+
+  .topbar { display:flex; align-items:center; justify-content:space-between; background:linear-gradient(135deg,#0c1a30,#16283d); color:#fff; padding:14px 20px; box-shadow:0 2px 10px rgba(12,26,48,0.25); }
+  .topbar-back { background:rgba(255,255,255,0.08); border:1px solid rgba(255,255,255,0.25); color:#fff; padding:7px 16px; border-radius:9px; cursor:pointer; font-family:inherit; font-size:0.85rem; transition:background .15s; }
+  .topbar-back:hover { background:rgba(255,255,255,0.16); }
+  .topbar-title { font-weight:800; font-size:1rem; letter-spacing:.2px; }
+  .topbar-user { color:#0c1a30; font-weight:700; font-size:0.85rem; background:#fff; padding:6px 14px; border-radius:20px; }
+
+  #loadingOverlay { display:flex; flex-direction:column; align-items:center; justify-content:center; height:70vh; gap:14px; }
+  .spin { width:46px; height:46px; border:4px solid #dbe4f0; border-top-color:#0c1a30; border-radius:50%; animation:spin .8s linear infinite; }
+  @keyframes spin { to { transform:rotate(360deg); } }
+  #noticeBox { display:none; text-align:center; padding:60px 20px; color:#64748b; font-size:0.95rem; }
+
+  .wrap { display:none; padding:20px; max-width:1200px; margin:0 auto; }
+
+  .toolbar { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:10px; margin-bottom:16px; background:#fff; border:1px solid #e2e8f0; border-radius:12px; padding:10px 14px; }
+  .toolbar-left { display:flex; gap:8px; flex-wrap:wrap; align-items:center; flex:1; }
+  .emp-search { flex:1; min-width:160px; max-width:240px; padding:8px 12px; border:1.5px solid #dbe2ea; border-radius:9px; font-family:inherit; font-size:0.82rem; background:#f8fafc; }
+  .filter-select { padding:8px 10px; border:1.5px solid #dbe2ea; border-radius:9px; font-family:inherit; font-size:0.8rem; background:#f8fafc; color:#334155; cursor:pointer; }
+  .btn-sm { border:none; border-radius:8px; padding:9px 16px; cursor:pointer; font-family:inherit; font-size:0.82rem; font-weight:700; transition:filter .15s; white-space:nowrap; }
+  .btn-sm:hover { filter:brightness(0.95); }
+  .btn-blue { background:#0c1a30; color:#fff; }
+  .btn-gray { background:#e2e8f0; color:#334155; }
+  .btn-red { background:#fee2e2; color:#dc2626; }
+  .btn-green { background:#dcfce7; color:#16a34a; }
+
+  .list-card { background:#fff; border-radius:14px; box-shadow:0 4px 18px rgba(15,23,42,0.08); border:1px solid #eef1f5; overflow:hidden; }
+  .tk-row { display:flex; align-items:center; gap:14px; padding:14px 16px; border-bottom:1px solid #f0f3f8; cursor:pointer; transition:background .12s; }
+  .tk-row:last-child { border-bottom:none; }
+  .tk-row:hover { background:#f8fafc; }
+  .tk-num { font-family:'Tajawal',monospace; font-weight:800; color:#0c1a30; background:#eef2f8; padding:5px 10px; border-radius:8px; font-size:0.8rem; white-space:nowrap; }
+  .tk-mid { flex:1; min-width:0; }
+  .tk-route { font-weight:700; font-size:0.85rem; color:#1e293b; display:flex; align-items:center; gap:6px; flex-wrap:wrap; }
+  .tk-arrow { color:#94a3b8; }
+  .tk-order { font-size:0.75rem; color:#64748b; margin-top:2px; }
+  .tk-note { font-size:0.78rem; color:#94a3b8; margin-top:2px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .tk-badge { font-size:0.72rem; font-weight:800; padding:4px 10px; border-radius:20px; white-space:nowrap; }
+  .tk-badge.open { background:#fef3c7; color:#92400e; }
+  .tk-badge.closed { background:#dcfce7; color:#16a34a; }
+  .tk-time { font-size:0.7rem; color:#94a3b8; white-space:nowrap; min-width:70px; text-align:start; }
+  .tk-unread { width:8px; height:8px; border-radius:50%; background:#2563eb; flex-shrink:0; }
+
+  .empty-state { text-align:center; padding:50px 20px; color:#94a3b8; font-size:0.9rem; }
+
+  /* ── stats popup ── */
+  .stat-summary { background:#eef2f8; color:#0c1a30; font-size:0.82rem; font-weight:700; padding:10px 12px; border-radius:9px; margin-bottom:10px; text-align:center; }
+  .stat-row { display:flex; align-items:center; justify-content:space-between; padding:8px 10px; border-bottom:1px solid #f0f3f8; font-size:0.85rem; }
+  .stat-row:last-child { border-bottom:none; }
+  .stat-count { background:#0c1a30; color:#fff; font-weight:800; font-size:0.75rem; padding:2px 10px; border-radius:20px; min-width:24px; text-align:center; }
+  .stats-list { max-height:320px; overflow-y:auto; border:1px solid #eef1f5; border-radius:10px; }
+
+  /* ── modal (new ticket) ── */
+  .modal-bg { display:none; position:fixed; inset:0; background:rgba(12,26,48,0.55); z-index:9500; align-items:center; justify-content:center; padding:16px; }
+  .modal-box { background:#fff; border-radius:16px; padding:22px; width:400px; max-width:100%; box-shadow:0 20px 50px rgba(0,0,0,.3); }
+  .modal-box h3 { margin:0 0 14px; font-size:1rem; color:#0c1a30; }
+  .modal-box label { display:block; font-size:0.78rem; font-weight:700; color:#475569; margin:12px 0 6px; }
+  .modal-box input, .modal-box select, .modal-box textarea { width:100%; padding:9px 10px; border:1.5px solid #cbd5e1; border-radius:8px; font-family:inherit; font-size:0.88rem; }
+  .modal-box textarea { resize:vertical; min-height:70px; }
+  .modal-btns { display:flex; gap:8px; justify-content:flex-end; margin-top:18px; }
+
+  /* ── chat / ticket detail screen ── */
+  #ticketScreen { display:none; position:fixed; inset:0; z-index:9200; background:#f3f6fa; flex-direction:column; }
+  .chat-head { background:linear-gradient(135deg,#0c1a30,#16283d); color:#fff; padding:12px 16px; display:flex; align-items:center; gap:12px; flex-wrap:wrap; }
+  .chat-head-back { background:rgba(255,255,255,0.08); border:1px solid rgba(255,255,255,0.25); color:#fff; padding:6px 14px; border-radius:8px; cursor:pointer; font-family:inherit; font-size:0.8rem; }
+  .chat-head-info { flex:1; min-width:0; }
+  .chat-head-num { font-weight:800; font-size:0.9rem; }
+  .chat-head-route { font-size:0.75rem; opacity:.9; margin-top:3px; display:flex; align-items:center; gap:5px; flex-wrap:wrap; line-height:1.5; }
+  .chat-head-route .dept-chip { background:rgba(255,255,255,0.12); border:1px solid rgba(255,255,255,0.2); padding:2px 8px; border-radius:20px; white-space:nowrap; }
+  .chat-head-route .dept-arrow { opacity:.6; }
+  .chat-head-order-row { font-size:0.75rem; opacity:.9; margin-top:5px; display:flex; align-items:center; gap:6px; }
+  .copy-order-btn { background:rgba(255,255,255,0.14); border:1px solid rgba(255,255,255,0.28); color:#fff; border-radius:7px; padding:3px 9px; font-size:0.72rem; font-weight:700; cursor:pointer; font-family:inherit; transition:background .15s; }
+  .copy-order-btn:hover { background:rgba(255,255,255,0.24); }
+  .copy-order-btn.copied { background:#16a34a; border-color:#16a34a; }
+  .chat-head-sub { font-size:0.75rem; opacity:.85; margin-top:2px; }
+  .chat-head-status { font-size:0.72rem; font-weight:800; padding:5px 12px; border-radius:20px; }
+  .chat-head-status.open { background:#fef3c7; color:#92400e; }
+  .chat-head-status.closed { background:#dcfce7; color:#166534; }
+
+  .chat-body { flex:1; overflow-y:auto; padding:16px; display:flex; flex-direction:column; gap:10px; }
+  .msg { max-width:78%; padding:9px 13px; border-radius:14px; font-size:0.85rem; line-height:1.5; position:relative; }
+  .msg.mine { align-self:flex-end; background:#0c1a30; color:#fff; border-bottom-end-radius:4px; }
+  .msg.theirs { align-self:flex-start; background:#fff; border:1px solid #e2e8f0; border-bottom-start-radius:4px; }
+  .msg.system { align-self:center; background:#eef2f8; color:#64748b; font-size:0.75rem; padding:6px 12px; border-radius:20px; }
+  .msg-sender { font-size:0.7rem; font-weight:800; margin-bottom:3px; opacity:.75; }
+  .msg-time { font-size:0.65rem; opacity:.65; margin-top:4px; }
+  .msg img.msg-img { max-width:220px; border-radius:10px; display:block; margin-top:4px; cursor:pointer; }
+  .msg audio { margin-top:4px; max-width:220px; }
+  .msg a.msg-file { display:flex; align-items:center; gap:6px; margin-top:4px; color:inherit; text-decoration:underline; font-size:0.8rem; }
+
+  .chat-input-bar { background:#fff; border-top:1px solid #e2e8f0; padding:10px 14px; display:flex; align-items:flex-end; gap:8px; }
+  .chat-input-bar textarea { flex:1; resize:none; border:1.5px solid #dbe2ea; border-radius:12px; padding:10px 12px; font-family:inherit; font-size:0.88rem; max-height:100px; }
+  .icon-btn { border:none; background:#eef2f8; color:#0c1a30; width:40px; height:40px; border-radius:12px; cursor:pointer; font-size:1.05rem; flex-shrink:0; }
+  .icon-btn:hover { filter:brightness(0.95); }
+  .icon-btn.recording { background:#fee2e2; color:#dc2626; animation:pulse 1s infinite; }
+  @keyframes pulse { 50% { opacity:.5; } }
+  .icon-btn.send { background:#0c1a30; color:#fff; }
+  .upload-progress { font-size:0.72rem; color:#64748b; padding:0 4px; }
+
+  .closed-banner { text-align:center; padding:10px; font-size:0.78rem; color:#64748b; background:#eef2f8; }
+
+  @media (max-width:640px) { .tk-time { display:none; } .msg { max-width:88%; } }
+
+  /* Desktop / larger screens — the smaller mobile-first sizes read as too
+     thin and small on a real monitor, so bump size + weight past 640px. */
+  @media (min-width:641px) {
+    body { font-size:1.02rem; }
+    .tk-route, .msg, .chatText, #chatText { font-weight:600; }
+    .msg { font-size:0.95rem; }
+    .tk-note, .tk-order { font-size:0.85rem; }
+    .chat-head-num { font-size:1.05rem; }
+    .chat-head-sub { font-size:0.85rem; }
+    #chatText { font-size:0.98rem; }
+  }
+
+  .msg-seen { display:inline-flex; align-items:center; margin-inline-start:5px; font-size:0.95rem; font-weight:800; line-height:1; opacity:.8; color:rgba(255,255,255,0.8); letter-spacing:-2px; vertical-align:middle; }
+  .msg-seen.seen { color:#5ec2ff; opacity:1; text-shadow:0 0 3px rgba(94,194,255,0.5); }
+  .btn-sm.active { outline:2px solid #0c1a30; outline-offset:-2px; }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <button class="topbar-back" onclick="goBack()">→ رجوع لاختيار النظام</button>
+  <div class="topbar-title">🎫 نظام التذاكر</div>
+  <span class="topbar-user" id="headerUserName" style="display:none"></span>
+</div>
+
+<div id="loadingOverlay"><div class="spin"></div><div style="color:#64748b;font-size:0.9rem">جارِ التحميل...</div></div>
+<div id="noticeBox"></div>
+
+<div class="wrap" id="mainWrap">
+  <div class="toolbar">
+    <div class="toolbar-left">
+      <input type="text" id="tkSearch" class="emp-search" placeholder="🔍 بحث برقم التذكرة..." oninput="renderList()">
+      <select id="sortMode" class="filter-select" onchange="renderList()" title="ترتيب التذاكر">
+        <option value="default">↕ الترتيب: مفتوحة ثم غير المقروءة</option>
+        <option value="unread">🔵 غير المقروءة أولاً</option>
+        <option value="status">مفتوحة / مغلقة</option>
+        <option value="newest">🕓 الأحدث أولاً</option>
+      </select>
+      <button class="btn-sm btn-gray" onclick="openStatsModal()" title="كم شخص فتح تذاكر">📊 الإحصائيات</button>
+      <select id="statusFilter" class="filter-select" onchange="renderList()">
+        <option value="">كل الحالات</option>
+        <option value="open">مفتوحة</option>
+        <option value="closed">مغلقة</option>
+      </select>
+      <select id="deptFilter" class="filter-select" onchange="renderList()">
+        <option value="">كل الأقسام</option>
+      </select>
+      <select id="scopeFilter" class="filter-select" onchange="renderList()">
+        <option value="all">كل التذاكر</option>
+        <option value="in">واردة لقسمي</option>
+        <option value="out">مرسلة من قسمي</option>
+      </select>
+      <button class="btn-sm btn-gray" id="archiveToggleBtn" onclick="toggleArchiveView()" title="التذاكر المغلقة منذ أكثر من ساعة">📦 الأرشيف</button>
+    </div>
+    <button class="btn-sm btn-blue" onclick="openNewTicketModal()">+ تذكرة جديدة</button>
+  </div>
+
+  <div class="list-card" id="tkList"></div>
+</div>
+
+<!-- Stats popup -->
+<div class="modal-bg" id="statsModal">
+  <div class="modal-box">
+    <h3>📊 من فتح تذاكر؟ (التذاكر المفتوحة حالياً)</h3>
+    <div id="statsBody"></div>
+    <div class="modal-btns"><button class="btn-sm btn-gray" onclick="closeStatsModal()">إغلاق</button></div>
+  </div>
+</div>
+
+<!-- New ticket modal -->
+<div class="modal-bg" id="newTkModal">
+  <div class="modal-box">
+    <h3>🎫 تذكرة جديدة</h3>
+    <label>القسم المطلوب</label>
+    <select id="ntDept"></select>
+    <label>رقم الوصل</label>
+    <input type="text" id="ntOrder" placeholder="مثال: 4521">
+    <label>ملاحظة / الطلب</label>
+    <textarea id="ntNote" placeholder="مثال: نحتاج تسجيل المكالمة الصوتية لهذا الطلب"></textarea>
+    <div class="modal-btns">
+      <button class="btn-sm btn-gray" onclick="closeNewTicketModal()">إلغاء</button>
+      <button class="btn-sm btn-blue" onclick="submitNewTicket()">إنشاء التذكرة</button>
+    </div>
+  </div>
+</div>
+
+<!-- Ticket detail / chat -->
+<div id="ticketScreen">
+  <div class="chat-head">
+    <button class="chat-head-back" onclick="closeTicketScreen()">→ رجوع</button>
+    <div class="chat-head-info">
+      <div class="chat-head-num" id="chNum"></div>
+      <div class="chat-head-route" id="chRoute"></div>
+      <div class="chat-head-order-row">
+        <span id="chOrder"></span>
+        <button class="copy-order-btn" id="copyOrderBtn" onclick="copyOrderNumber()" title="نسخ رقم الوصل">📋 نسخ</button>
+      </div>
+    </div>
+    <span class="chat-head-status" id="chStatus"></span>
+    <button class="btn-sm btn-green" id="chToggleBtn" onclick="toggleTicketStatus()"></button>
+  </div>
+  <div class="chat-body" id="chBody"></div>
+  <div class="closed-banner" id="closedBanner" style="display:none">🔒 هذه التذكرة مغلقة — يمكنك فتحها مجدداً للمتابعة</div>
+  <div class="chat-input-bar" id="chatInputBar">
+    <input type="file" id="fileInput" accept="image/*,audio/*,.pdf,.doc,.docx" style="display:none" onchange="onFilePicked(event)">
+    <button class="icon-btn" title="إرفاق ملف" onclick="document.getElementById('fileInput').click()">📎</button>
+    <button class="icon-btn" id="micBtn" title="تسجيل صوتي" onclick="toggleRecording()">🎤</button>
+    <textarea id="chatText" placeholder="اكتب رسالة..." rows="1" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendTextMessage();}"></textarea>
+    <button class="icon-btn send" title="إرسال" onclick="sendTextMessage()">➤</button>
+  </div>
+  <div class="upload-progress" id="uploadProgress"></div>
+</div>
+
+<script>
+// ═══════════════════════════════════════════════════════════════
+// FIREBASE — same project as the rest of Mutabaa
+// ═══════════════════════════════════════════════════════════════
+const firebaseConfig = {
+  apiKey: "AIzaSyA1q9LiS6EXNCBFmFvytyN-p4KKgP9wym4",
+  authDomain: "prime-e-8eb80.firebaseapp.com",
+  databaseURL: "https://prime-e-8eb80-default-rtdb.firebaseio.com",
+  projectId: "prime-e-8eb80",
+  storageBucket: "prime-e-8eb80.firebasestorage.app",
+  messagingSenderId: "671376930301",
+  appId: "1:671376930301:web:f8b61666314f3149fb5594"
+};
+firebase.initializeApp(firebaseConfig);
+const fbDB = firebase.database();
+const fbAuth = firebase.auth();
+
+// ═══════════════════════════════════════════════════════════════
+// !! CONFIGURE THIS after deploying the Cloudflare Worker !!
+// See ticket-uploads-worker.js + ticket-system-SETUP.md
+// ═══════════════════════════════════════════════════════════════
+const UPLOAD_ENDPOINT = "https://tight-dew-afce.ahmedallraqe287.workers.dev";
+const UPLOAD_TOKEN = "mtb-9f3k2ld8x0qz7vh4wq1e6r";
+const MAX_FILE_BYTES = 50 * 1024 * 1024; // 50MB
+
+// ═══════════════════════════════════════════════════════════════
+// AUTH — same pattern as departments-attendance.html: resolved
+// fresh here, not trusted from URL params, since Firebase Auth is
+// shared across the same-origin iframe session set up by login.html.
+// ═══════════════════════════════════════════════════════════════
+let myWorkspaceOwner = null;
+let isAdmin = false;
+let myUid = null;
+let myDisplayName = '';
+let myOwnDepartment = '';   // department this staff member belongs to
+let canSeeAllDepts = false; // admins / delegated admins see every ticket
+
+function computeMemberSystems(p) {
+  if (p.systems) {
+    return { admin: p.systems.admin || 'none', tickets: p.systems.tickets };
+  }
+  return { admin: p.isAdmin ? 'edit' : 'none', tickets: undefined };
+}
+
+function showNotice(msg) {
+  document.getElementById('loadingOverlay').style.display = 'none';
+  const n = document.getElementById('noticeBox');
+  n.textContent = msg;
+  n.style.display = 'block';
+}
+
+fbAuth.onAuthStateChanged(function (user) {
+  if (!user) { showNotice('الرجاء تسجيل الدخول من الملف الرئيسي أولاً'); return; }
+  myUid = user.uid;
+  fbDB.ref('admins/' + user.uid).once('value').then(adminSnap => {
+    if (adminSnap.val() === true) {
+      isAdmin = true;
+      myWorkspaceOwner = user.uid;
+      canSeeAllDepts = true;
+      myDisplayName = (fbAuth.currentUser && fbAuth.currentUser.displayName) || 'المشرف';
+      boot();
+      return;
+    }
+    fbDB.ref('memberIndex/' + user.uid).once('value').then(idxSnap => {
+      const owner = idxSnap.val();
+      if (!owner) { showNotice('حساب غير مرتبط بمساحة عمل'); return; }
+      myWorkspaceOwner = owner;
+      fbDB.ref('staffMembers/' + owner + '/' + user.uid).once('value').then(pSnap => {
+        const p = pSnap.val() || {};
+        const sys = computeMemberSystems(p);
+        // Ticket system is open to everyone by default (it's a cross-
+        // department tool) unless an admin explicitly disables it for
+        // this member via systems.tickets = 'none'.
+        if (sys.tickets === 'none') {
+          showNotice('🚫 ليس لديك صلاحية الوصول إلى نظام التذاكر. تواصل مع المشرف.');
+          return;
+        }
+        canSeeAllDepts = sys.admin === 'edit';
+        myOwnDepartment = (p.department || '').trim();
+        myDisplayName = p.name || p.phone || '';
+        boot();
+      });
+    });
+  }).catch(() => showNotice('تعذّر الاتصال بقاعدة البيانات'));
+});
+
+function goBack() {
+  if (window.parent && window.parent !== window && typeof window.parent.backToChooserFromTickets === 'function') {
+    window.parent.backToChooserFromTickets();
+  } else if (window.parent && window.parent !== window && typeof window.parent.backToChooserFromDepartments === 'function') {
+    window.parent.backToChooserFromDepartments();
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// STATE
+// ═══════════════════════════════════════════════════════════════
+let departments = [];      // [{id, name}] pulled from the same node departments-attendance uses
+let tickets = {};          // ticketId -> ticket object (includes .messages once loaded)
+let activeTicketId = null;
+let messagesRef = null;
+let mediaRecorder = null;
+let recordedChunks = [];
+let lastReadAt = {};       // ticketId -> timestamp, from localStorage, for the unread dot
+let viewingArchive = false; // toggled by the 📦 الأرشيف button
+const ARCHIVE_AFTER_MS = 60 * 60 * 1000; // closed tickets move to archive 1h after closing
+
+function isArchived(t) {
+  return t.status === 'closed' && (Date.now() - (t.closedAt || t.updatedAt || 0)) >= ARCHIVE_AFTER_MS;
+}
+
+function ticketsRootRef() { return fbDB.ref('tickets/' + myWorkspaceOwner); }
+
+// Departments to route tickets to — pulled from the same set of systems
+// defined in لوحة تحكم المشرف (admin-dashboard), instead of the separate
+// نظام متابعة الأقسام list, so hr / manager / etc. show up too.
+const TICKET_DEPTS = [
+  { key: 'matabaa', name: 'المتابعة' },
+  { key: 'sales', name: 'المبيعات' },
+  { key: 'hr', name: 'الموارد البشرية' },
+  { key: 'manager', name: 'المدير' },
+  { key: 'accounts', name: 'الحسابات' },
+  { key: 'badala', name: 'البدالة' }
+];
+
+function boot() {
+  document.getElementById('loadingOverlay').style.display = 'none';
+  document.getElementById('mainWrap').style.display = 'block';
+  const badge = document.getElementById('headerUserName');
+  badge.textContent = myDisplayName + (myOwnDepartment ? ' · ' + myOwnDepartment : '');
+  badge.style.display = 'inline-block';
+
+  try { lastReadAt = JSON.parse(localStorage.getItem('ticketsLastRead') || '{}'); } catch (e) { lastReadAt = {}; }
+
+  // Departments — same fixed set of systems shown in لوحة تحكم المشرف
+  // (admin-dashboard), so hr / manager / etc. are available as targets.
+  departments = TICKET_DEPTS;
+  fillDeptDropdowns();
+
+  ticketsRootRef().on('value', snap => {
+    const val = snap.val() || {};
+    tickets = val;
+    renderList();
+    if (activeTicketId && tickets[activeTicketId]) renderChatHeader();
+  });
+}
+
+function fillDeptDropdowns() {
+  const deptFilter = document.getElementById('deptFilter');
+  const ntDept = document.getElementById('ntDept');
+  const names = departments.map(d => d.name);
+  deptFilter.innerHTML = '<option value="">كل الأقسام</option>' + names.map(n => `<option value="${escapeHtml(n)}">${escapeHtml(n)}</option>`).join('');
+  ntDept.innerHTML = names.map(n => `<option value="${escapeHtml(n)}">${escapeHtml(n)}</option>`).join('');
+}
+
+function escapeHtml(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+function timeAgo(ts) {
+  if (!ts) return '';
+  const s = Math.floor((Date.now() - ts) / 1000);
+  if (s < 60) return 'الآن';
+  if (s < 3600) return Math.floor(s / 60) + 'د';
+  if (s < 86400) return Math.floor(s / 3600) + 'س';
+  return Math.floor(s / 86400) + 'ي';
+}
+
+// ═══════════════════════════════════════════════════════════════
+// TICKET LIST
+// ═══════════════════════════════════════════════════════════════
+function renderList() {
+  const q = (document.getElementById('tkSearch').value || '').trim().toUpperCase();
+  const statusF = document.getElementById('statusFilter').value;
+  const deptF = document.getElementById('deptFilter').value;
+  const scopeF = document.getElementById('scopeFilter').value;
+
+  let arr = Object.keys(tickets).map(id => Object.assign({ id }, tickets[id]));
+  // Non-admins only see tickets that involve their own department — either
+  // side they sent it or the side it was sent to. Admins/delegated admins
+  // (canSeeAllDepts) see every ticket across every department.
+  if (!canSeeAllDepts) {
+    arr = arr.filter(t => t.fromDept === myOwnDepartment || t.toDept === myOwnDepartment);
+  }
+  arr = arr.filter(t => {
+    // Tickets closed for 1h+ live only in the archive view, not the main
+    // list; anything else (open, or closed <1h ago) lives only in the main
+    // list — never shown in both places at once.
+    if (viewingArchive) { if (!isArchived(t)) return false; }
+    else { if (isArchived(t)) return false; }
+    if (q && !(t.ticketNumber || '').toUpperCase().includes(q) && !(t.orderNumber || '').toUpperCase().includes(q)) return false;
+    if (statusF && t.status !== statusF) return false;
+    if (deptF && t.toDept !== deptF && t.fromDept !== deptF) return false;
+    if (scopeF === 'in' && t.toDept !== myOwnDepartment) return false;
+    if (scopeF === 'out' && t.fromDept !== myOwnDepartment) return false;
+    return true;
+  });
+  const isUnread = t => (t.updatedAt || 0) > (lastReadAt[t.id] || 0) && t.lastSenderUid !== myUid;
+  const byTime = (a, b) => (b.updatedAt || b.createdAt || 0) - (a.updatedAt || a.createdAt || 0);
+
+  const sortMode = document.getElementById('sortMode').value;
+  if (sortMode === 'newest') {
+    // Pure recency, no grouping.
+    arr.sort(byTime);
+  } else if (sortMode === 'unread') {
+    // Unread first regardless of open/closed, then by recency.
+    arr.sort((a, b) => (Number(isUnread(b)) - Number(isUnread(a))) || byTime(a, b));
+  } else if (sortMode === 'status') {
+    // Open before closed, then by recency.
+    arr.sort((a, b) => (Number(a.status === 'closed') - Number(b.status === 'closed')) || byTime(a, b));
+  } else {
+    // Default: open tickets float to the top and closed ones sink to the
+    // bottom; within each group, unread tickets come before read ones;
+    // ties broken by most recent activity.
+    arr.sort((a, b) => {
+      const closedDiff = Number(a.status === 'closed') - Number(b.status === 'closed');
+      if (closedDiff !== 0) return closedDiff;
+      const unreadDiff = Number(isUnread(b)) - Number(isUnread(a));
+      if (unreadDiff !== 0) return unreadDiff;
+      return byTime(a, b);
+    });
+  }
+
+  const list = document.getElementById('tkList');
+  if (arr.length === 0) {
+    list.innerHTML = `<div class="empty-state">${viewingArchive ? 'لا توجد تذاكر في الأرشيف' : 'لا توجد تذاكر مطابقة'}</div>`;
+    return;
+  }
+  list.innerHTML = arr.map(t => {
+    const unread = isUnread(t);
+    return `
+    <div class="tk-row" onclick="openTicketScreen('${t.id}')">
+      ${unread ? '<span class="tk-unread"></span>' : '<span style="width:8px"></span>'}
+      <span class="tk-num">#${escapeHtml(t.ticketNumber || '')}</span>
+      <div class="tk-mid">
+        <div class="tk-route">${escapeHtml(t.fromDept || '')} <span class="tk-arrow">←</span> ${escapeHtml(t.toDept || '')}</div>
+        <div class="tk-order">📦 ${escapeHtml(t.orderNumber || '—')}</div>
+        <div class="tk-note">${escapeHtml(t.note || '')}</div>
+      </div>
+      <span class="tk-badge ${t.status === 'closed' ? 'closed' : 'open'}">${t.status === 'closed' ? 'مغلقة' : 'مفتوحة'}</span>
+      <span class="tk-time">${timeAgo(t.updatedAt || t.createdAt)}</span>
+    </div>`;
+  }).join('');
+}
+
+function toggleArchiveView() {
+  viewingArchive = !viewingArchive;
+  const btn = document.getElementById('archiveToggleBtn');
+  btn.textContent = viewingArchive ? '↩ رجوع للتذاكر' : '📦 الأرشيف';
+  btn.classList.toggle('active', viewingArchive);
+  renderList();
+}
+
+// Re-render every minute so a closed ticket quietly slides into the
+// archive once it crosses the 1-hour mark, without needing a page refresh.
+setInterval(() => { if (document.getElementById('mainWrap').style.display !== 'none') renderList(); }, 60 * 1000);
+
+// ═══════════════════════════════════════════════════════════════
+// STATS POPUP — "كم شخص فتح تذاكر" — counts currently-open tickets
+// grouped by whoever created them.
+// ═══════════════════════════════════════════════════════════════
+function openStatsModal() {
+  const openArr = Object.keys(tickets).map(id => tickets[id]).filter(t => t.status !== 'closed');
+  const byPerson = {};
+  openArr.forEach(t => {
+    const name = t.createdByName || 'غير معروف';
+    byPerson[name] = (byPerson[name] || 0) + 1;
+  });
+  const names = Object.keys(byPerson).sort((a, b) => byPerson[b] - byPerson[a]);
+  const rows = names.map(n => `<div class="stat-row"><span>${escapeHtml(n)}</span><span class="stat-count">${byPerson[n]}</span></div>`).join('')
+    || '<div class="empty-state" style="padding:24px">لا توجد تذاكر مفتوحة حالياً</div>';
+  document.getElementById('statsBody').innerHTML = `
+    <div class="stat-summary">📬 إجمالي التذاكر المفتوحة: ${openArr.length} · 👤 عدد الأشخاص: ${names.length}</div>
+    <div class="stats-list">${rows}</div>`;
+  document.getElementById('statsModal').style.display = 'flex';
+}
+function closeStatsModal() { document.getElementById('statsModal').style.display = 'none'; }
+
+// ═══════════════════════════════════════════════════════════════
+// COPY ORDER NUMBER — button lives inside the ticket screen itself
+// (chat header), so staff must open the ticket to copy its order number.
+// ═══════════════════════════════════════════════════════════════
+function copyOrderNumber() {
+  const t = tickets[activeTicketId];
+  const val = t && t.orderNumber;
+  if (!val) { alert('لا يوجد رقم طلب لهذه التذكرة'); return; }
+  const btn = document.getElementById('copyOrderBtn');
+  const done = () => {
+    const old = btn.textContent;
+    btn.textContent = '✅ نُسخ';
+    btn.classList.add('copied');
+    setTimeout(() => { btn.textContent = old; btn.classList.remove('copied'); }, 1200);
+  };
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(val).then(done).catch(() => fallbackCopyText(val, done));
+  } else {
+    fallbackCopyText(val, done);
+  }
+}
+function fallbackCopyText(val, cb) {
+  const ta = document.createElement('textarea');
+  ta.value = val; ta.style.position = 'fixed'; ta.style.opacity = '0';
+  document.body.appendChild(ta); ta.select();
+  try { document.execCommand('copy'); } catch (e) {}
+  document.body.removeChild(ta);
+  cb();
+}
+
+// ═══════════════════════════════════════════════════════════════
+// NEW TICKET
+// ═══════════════════════════════════════════════════════════════
+function openNewTicketModal() {
+  document.getElementById('ntOrder').value = '';
+  document.getElementById('ntNote').value = '';
+  document.getElementById('newTkModal').style.display = 'flex';
+}
+function closeNewTicketModal() { document.getElementById('newTkModal').style.display = 'none'; }
+
+function submitNewTicket() {
+  const toDept = document.getElementById('ntDept').value;
+  const orderNumber = document.getElementById('ntOrder').value.trim();
+  const note = document.getElementById('ntNote').value.trim();
+  if (!toDept) { alert('اختر القسم المطلوب'); return; }
+  if (!note) { alert('اكتب ملاحظة توضح الطلب'); return; }
+
+  const ref = ticketsRootRef().push();
+  const ticketNumber = ref.key.slice(-6).toUpperCase();
+  const now = firebase.database.ServerValue.TIMESTAMP;
+  ref.set({
+    ticketNumber, orderNumber, note,
+    fromDept: myOwnDepartment || '—',
+    toDept,
+    status: 'open',
+    createdBy: myUid, createdByName: myDisplayName,
+    createdAt: now, updatedAt: now,
+    lastSenderUid: myUid,
+  }).then(() => {
+    closeNewTicketModal();
+    openTicketScreen(ref.key);
+  });
+}
+
+// ═══════════════════════════════════════════════════════════════
+// TICKET DETAIL / CHAT
+// ═══════════════════════════════════════════════════════════════
+function openTicketScreen(id) {
+  const t = tickets[id];
+  if (!canSeeAllDepts && t && t.fromDept !== myOwnDepartment && t.toDept !== myOwnDepartment) {
+    alert('🚫 هذه التذكرة تخص قسماً آخر، لا يمكنك فتحها');
+    return;
+  }
+  activeTicketId = id;
+  document.getElementById('ticketScreen').style.display = 'flex';
+  renderChatHeader();
+
+  if (messagesRef) messagesRef.off();
+  messagesRef = fbDB.ref('tickets/' + myWorkspaceOwner + '/' + id + '/messages');
+  messagesRef.on('value', snap => {
+    renderMessages(snap.val() || {});
+  });
+
+  lastReadAt[id] = Date.now();
+  try { localStorage.setItem('ticketsLastRead', JSON.stringify(lastReadAt)); } catch (e) {}
+}
+
+function closeTicketScreen() {
+  clearTimeout(readMarkTimer);
+  document.getElementById('ticketScreen').style.display = 'none';
+  if (messagesRef) { messagesRef.off(); messagesRef = null; }
+  activeTicketId = null;
+  renderList();
+}
+
+function renderChatHeader() {
+  const t = tickets[activeTicketId];
+  if (!t) return;
+  document.getElementById('chNum').textContent = '🎫 #' + t.ticketNumber;
+  // Departments as separate chips instead of one long concatenated string —
+  // long/combined department names (e.g. a department entry that itself
+  // holds several names) used to wrap into a messy multi-line block.
+  document.getElementById('chRoute').innerHTML =
+    `<span class="dept-chip">${escapeHtml(t.fromDept || '—')}</span><span class="dept-arrow">←</span><span class="dept-chip">${escapeHtml(t.toDept || '—')}</span>`;
+  document.getElementById('chOrder').textContent = '📦 وصل ' + (t.orderNumber || '—');
+  const copyBtn = document.getElementById('copyOrderBtn');
+  copyBtn.style.display = t.orderNumber ? 'inline-block' : 'none';
+  const statusEl = document.getElementById('chStatus');
+  statusEl.textContent = t.status === 'closed' ? 'مغلقة' : 'مفتوحة';
+  statusEl.className = 'chat-head-status ' + (t.status === 'closed' ? 'closed' : 'open');
+  const toggleBtn = document.getElementById('chToggleBtn');
+  toggleBtn.textContent = t.status === 'closed' ? '↻ إعادة فتح' : '✓ إغلاق';
+  toggleBtn.className = 'btn-sm ' + (t.status === 'closed' ? 'btn-green' : 'btn-red');
+  document.getElementById('closedBanner').style.display = t.status === 'closed' ? 'block' : 'none';
+  document.getElementById('chatInputBar').style.display = t.status === 'closed' ? 'none' : 'flex'; // locked while closed — reopen to keep chatting
+}
+
+function toggleTicketStatus() {
+  const btn = document.getElementById('chToggleBtn');
+  // Guard against rapid double-clicks/double-fires causing an immediate
+  // close→reopen→close flip: lock the button for a beat and always act on
+  // the very latest value read fresh from Firebase, not the local cache
+  // (two people tapping at nearly the same moment were racing on stale
+  // local state, which produced the alternating system messages).
+  if (btn.disabled) return;
+  btn.disabled = true;
+  const ref = fbDB.ref('tickets/' + myWorkspaceOwner + '/' + activeTicketId);
+  ref.child('status').once('value').then(snap => {
+    const current = snap.val();
+    const newStatus = current === 'closed' ? 'open' : 'closed';
+    // closedAt marks when it became closed, used to auto-move it into the
+    // archive after 1 hour; cleared on reopen so it stays out of the archive.
+    return ref.update({
+      status: newStatus,
+      updatedAt: firebase.database.ServerValue.TIMESTAMP,
+      closedAt: newStatus === 'closed' ? firebase.database.ServerValue.TIMESTAMP : null,
+    }).then(() => {
+      pushSystemMessage(newStatus === 'closed' ? '🔒 تم إغلاق التذكرة بواسطة ' + myDisplayName : '↻ تم إعادة فتح التذكرة بواسطة ' + myDisplayName);
+    });
+  }).finally(() => {
+    setTimeout(() => { btn.disabled = false; }, 900);
+  });
+}
+
+let readMarkTimer = null;
+
+function renderMessages(msgs) {
+  const body = document.getElementById('chBody');
+  const wasNearBottom = body.scrollTop + body.clientHeight >= body.scrollHeight - 60;
+  const arr = Object.keys(msgs).map(id => Object.assign({ id }, msgs[id])).sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
+
+  body.innerHTML = arr.map(m => {
+    if (m.type === 'system') {
+      return `<div class="msg system">${escapeHtml(m.text)}</div>`;
+    }
+    const mine = m.senderUid === myUid;
+    let inner = '';
+    if (m.type === 'text') {
+      inner = escapeHtml(m.text).replace(/\n/g, '<br>');
+    } else if (m.type === 'image') {
+      inner = `<img class="msg-img" src="${m.url}" onclick="window.open('${m.url}','_blank')">`;
+    } else if (m.type === 'voice') {
+      inner = `<audio controls src="${m.url}"></audio>`;
+    } else if (m.type === 'file') {
+      inner = `<a class="msg-file" href="${m.url}" target="_blank">📄 ${escapeHtml(m.fileName || 'ملف')}</a>`;
+    }
+    // Read receipt: only shown on messages I sent. "Seen" = at least one
+    // other person's uid is present in readBy (readBy is only ever written
+    // for messages that aren't your own — see scheduleMarkRead below).
+    let seenHtml = '';
+    if (mine) {
+      const readByOthers = m.readBy && Object.keys(m.readBy).some(uid => uid !== myUid);
+      // Plain text check-marks instead of an emoji: emoji glyphs render in
+      // full color and ignore CSS `color`/opacity, which is why the old 👁
+      // was nearly invisible on small phone screens. ✓/✓✓ are real text
+      // glyphs, so size/color/contrast all apply properly.
+      seenHtml = `<span class="msg-seen ${readByOthers ? 'seen' : ''}" title="${readByOthers ? 'تمت المشاهدة' : 'تم الإرسال، لم تتم المشاهدة بعد'}">${readByOthers ? '✓✓' : '✓'}</span>`;
+    }
+    return `<div class="msg ${mine ? 'mine' : 'theirs'}">
+      ${!mine ? `<div class="msg-sender">${escapeHtml(m.senderName)} · ${escapeHtml(m.dept || '')}</div>` : ''}
+      ${inner}
+      <div class="msg-time">${formatTime(m.createdAt)}${seenHtml}</div>
+    </div>`;
+  }).join('');
+
+  if (wasNearBottom) body.scrollTop = body.scrollHeight;
+  scheduleMarkRead(msgs);
+}
+
+// Marks incoming (not-mine) messages as read — but only after the ticket
+// screen has stayed open for a beat, so a quick accidental open/close
+// doesn't falsely mark things as seen. Cancelled if the screen closes
+// before the delay elapses.
+function scheduleMarkRead(msgs) {
+  clearTimeout(readMarkTimer);
+  readMarkTimer = setTimeout(() => {
+    if (!activeTicketId || document.getElementById('ticketScreen').style.display !== 'flex') return;
+    Object.keys(msgs).forEach(id => {
+      const m = msgs[id];
+      if (m.type === 'system' || !m.senderUid || m.senderUid === myUid) return;
+      if (m.readBy && m.readBy[myUid]) return;
+      fbDB.ref('tickets/' + myWorkspaceOwner + '/' + activeTicketId + '/messages/' + id + '/readBy/' + myUid).set(firebase.database.ServerValue.TIMESTAMP);
+    });
+  }, 1500);
+}
+
+function formatTime(ts) {
+  if (!ts) return '';
+  const d = new Date(ts);
+  return d.toLocaleTimeString('ar-IQ', { hour: '2-digit', minute: '2-digit' });
+}
+
+function pushMessage(data) {
+  const t = tickets[activeTicketId];
+  if (t && t.status === 'closed') { alert('هذه التذكرة مغلقة — أعد فتحها أولاً للمتابعة'); return; }
+  const now = firebase.database.ServerValue.TIMESTAMP;
+  fbDB.ref('tickets/' + myWorkspaceOwner + '/' + activeTicketId + '/messages').push(Object.assign({
+    senderUid: myUid, senderName: myDisplayName, dept: myOwnDepartment || '—', createdAt: now,
+  }, data));
+  fbDB.ref('tickets/' + myWorkspaceOwner + '/' + activeTicketId).update({ updatedAt: now, lastSenderUid: myUid });
+}
+function pushSystemMessage(text) {
+  fbDB.ref('tickets/' + myWorkspaceOwner + '/' + activeTicketId + '/messages').push({ type: 'system', text, createdAt: firebase.database.ServerValue.TIMESTAMP });
+}
+
+function sendTextMessage() {
+  const el = document.getElementById('chatText');
+  const text = el.value.trim();
+  if (!text) return;
+  pushMessage({ type: 'text', text });
+  el.value = '';
+}
+
+// ═══════════════════════════════════════════════════════════════
+// FILE / VOICE UPLOAD — relays through the Cloudflare Worker, which
+// writes to R2. R2 lifecycle rule (set in Cloudflare dashboard, not
+// here) deletes objects automatically after 48 hours.
+// ═══════════════════════════════════════════════════════════════
+function onFilePicked(e) {
+  const file = e.target.files[0];
+  e.target.value = '';
+  if (!file) return;
+  uploadAndSend(file, file.type.startsWith('image/') ? 'image' : 'file', file.name);
+}
+
+async function uploadAndSend(blob, type, fileName) {
+  if (blob.size > MAX_FILE_BYTES) {
+    alert('حجم الملف أكبر من 50MB، الرجاء إرسال ملف أصغر.');
+    return;
+  }
+  const progress = document.getElementById('uploadProgress');
+  progress.textContent = '⏳ جارِ الرفع... (' + Math.round(blob.size / 1024) + ' KB)';
+  try {
+    const res = await fetch(UPLOAD_ENDPOINT + '/upload/' + activeTicketId, {
+      method: 'POST',
+      headers: {
+        'Content-Type': blob.type || 'application/octet-stream',
+        'X-Upload-Token': UPLOAD_TOKEN,
+        'X-File-Name': fileName || ('file-' + Date.now()),
+      },
+      body: blob,
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'upload failed');
+    pushMessage({ type, url: data.url, fileName: fileName || '', size: blob.size });
+    progress.textContent = '';
+  } catch (err) {
+    progress.textContent = '';
+    alert('تعذّر رفع الملف: ' + err.message + '\n(تأكد من إعداد رابط الـ Worker في أعلى الملف)');
+  }
+}
+
+// ── voice recording ──
+async function toggleRecording() {
+  const btn = document.getElementById('micBtn');
+  if (mediaRecorder && mediaRecorder.state === 'recording') {
+    mediaRecorder.stop();
+    return;
+  }
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    recordedChunks = [];
+    mediaRecorder = new MediaRecorder(stream);
+    mediaRecorder.ondataavailable = ev => { if (ev.data.size > 0) recordedChunks.push(ev.data); };
+    mediaRecorder.onstop = () => {
+      btn.classList.remove('recording');
+      stream.getTracks().forEach(t => t.stop());
+      const blob = new Blob(recordedChunks, { type: 'audio/webm' });
+      if (blob.size > 300) uploadAndSend(blob, 'voice', 'voice-note.webm');
+    };
+    mediaRecorder.start();
+    btn.classList.add('recording');
+  } catch (err) {
+    alert('تعذّر الوصول للمايكروفون: ' + err.message);
+  }
+}
+</script>
+</body>
+</html>
