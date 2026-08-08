@@ -552,6 +552,15 @@ tr:hover td { background: #fafafa; }
 </div>
 </div>
 
+<!-- Manage Departments -->
+<div class="card-panel">
+<div class="card-header">
+<div class="card-title">إدارة الأقسام</div>
+<div class="card-subtitle">هذه قائمة كل الأقسام المستخدمة حاليًا (من حقل القسم لدى الموظفين). حذف قسم هنا يزيله نهائيًا من كل من كان معيَّنًا إليه.</div>
+</div>
+<div id="deptManageList" style="display:flex;flex-wrap:wrap;gap:8px">جارِ التحميل...</div>
+</div>
+
 <!-- Existing Accounts Table Block -->
 <div class="card-panel">
 <div class="card-header">
@@ -959,6 +968,7 @@ renderAnnouncementDeptOptions();
 renderAnnouncementHistory();
 
 migrateLegacyMembersForWorkspace().then(renderMembersTable);
+renderDeptManageList();
 }
 
 function renderMembersTable() {
@@ -1409,6 +1419,44 @@ snap.forEach(child => {
 parseDepartments(child.val().department).forEach(d => depts.add(d));
 });
 cb(Array.from(depts).sort((a, b) => a.localeCompare(b, 'ar')));
+});
+}
+
+// ═══ Global department management — lists every department currently
+// assigned to any staff member, and lets the admin delete one entirely
+// (stripped from every member's "department" field at once). ═══
+function renderDeptManageList() {
+const listEl = document.getElementById('deptManageList');
+if (!listEl) return;
+collectAllDepartments(all => {
+if (all.length === 0) {
+listEl.innerHTML = '<div style="color:#94a3b8;font-size:0.82rem">لا توجد أقسام بعد.</div>';
+return;
+}
+listEl.innerHTML = all.map(d => `
+<span style="display:inline-flex;align-items:center;gap:6px;background:var(--accent-light);color:var(--accent);border-radius:999px;padding:4px 6px 4px 12px;font-size:0.78rem;font-weight:700">
+${escapeHtml(d)}
+<button onclick='deleteDepartmentGlobally(${JSON.stringify(d)})' title="حذف هذا القسم نهائيًا من كل الموظفين" style="border:none;background:rgba(220,38,38,0.12);color:#dc2626;width:20px;height:20px;border-radius:50%;cursor:pointer;font-size:0.78rem;line-height:1;display:flex;align-items:center;justify-content:center;padding:0">✕</button>
+</span>`).join('');
+});
+}
+
+function deleteDepartmentGlobally(dept) {
+if (!confirm('حذف قسم "' + dept + '" نهائيًا من كل الموظفين المعيَّنين إليه؟ لا يمكن التراجع عن هذا.')) return;
+staffMembersRef().once('value').then(snap => {
+const updates = [];
+snap.forEach(child => {
+const current = parseDepartments(child.val().department);
+if (current.includes(dept)) {
+const remaining = current.filter(d => d !== dept).join('، ');
+updates.push(staffMemberRef(child.key).child('department').set(remaining));
+}
+});
+Promise.all(updates).then(() => {
+renderDeptManageList();
+renderAnnouncementDeptOptions();
+renderAdminDashboard();
+}).catch(err => console.error('deleteDepartmentGlobally failed', err));
 });
 }
 

@@ -406,14 +406,11 @@ function ticketsRootRef() { return fbDB.ref('tickets/' + myWorkspaceOwner); }
 // Departments to route tickets to — pulled from the same set of systems
 // defined in لوحة تحكم المشرف (admin-dashboard), instead of the separate
 // نظام متابعة الأقسام list, so hr / manager / etc. show up too.
-const TICKET_DEPTS = [
-  { key: 'matabaa', name: 'المتابعة' },
-  { key: 'sales', name: 'المبيعات' },
-  { key: 'hr', name: 'الموارد البشرية' },
-  { key: 'manager', name: 'المدير' },
-  { key: 'accounts', name: 'الحسابات' },
-  { key: 'badala', name: 'البدالة' }
-];
+// Departments to route tickets to — pulled live from the same "القسم"
+// field staff members are assigned in لوحة تحكم المشرف (admin-dashboard),
+// instead of a fixed hardcoded list, so adding/renaming/removing a
+// department there is reflected here automatically.
+function staffMembersForDeptsRef() { return fbDB.ref('staffMembers/' + myWorkspaceOwner); }
 
 function boot() {
   document.getElementById('loadingOverlay').style.display = 'none';
@@ -424,10 +421,15 @@ function boot() {
 
   try { lastReadAt = JSON.parse(localStorage.getItem('ticketsLastRead') || '{}'); } catch (e) { lastReadAt = {}; }
 
-  // Departments — same fixed set of systems shown in لوحة تحكم المشرف
-  // (admin-dashboard), so hr / manager / etc. are available as targets.
-  departments = TICKET_DEPTS;
-  fillDeptDropdowns();
+  staffMembersForDeptsRef().on('value', snap => {
+    const val = snap.val() || {};
+    const set = new Set();
+    Object.keys(val).forEach(uid => {
+      parseDepartments(val[uid] && val[uid].department).forEach(d => set.add(d));
+    });
+    departments = Array.from(set).sort((a, b) => a.localeCompare(b, 'ar')).map(name => ({ id: name, name }));
+    fillDeptDropdowns();
+  });
 
   ticketsRootRef().on('value', snap => {
     const val = snap.val() || {};
@@ -441,8 +443,12 @@ function fillDeptDropdowns() {
   const deptFilter = document.getElementById('deptFilter');
   const ntDept = document.getElementById('ntDept');
   const names = departments.map(d => d.name);
+  const prevFilterVal = deptFilter.value;
+  const prevNtVal = ntDept.value;
   deptFilter.innerHTML = '<option value="">كل الأقسام</option>' + names.map(n => `<option value="${escapeHtml(n)}">${escapeHtml(n)}</option>`).join('');
   ntDept.innerHTML = names.map(n => `<option value="${escapeHtml(n)}">${escapeHtml(n)}</option>`).join('');
+  if (names.includes(prevFilterVal)) deptFilter.value = prevFilterVal;
+  if (names.includes(prevNtVal)) ntDept.value = prevNtVal;
 }
 
 function escapeHtml(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
