@@ -62,8 +62,8 @@ Firebase Realtime Database يخزّن فقط: التذاكر، الرسائل ا
   .tk-badge.closed { background:#dcfce7; color:#16a34a; }
   .tk-time { font-size:0.7rem; color:#94a3b8; white-space:nowrap; min-width:70px; text-align:start; }
   .tk-unread { width:8px; height:8px; border-radius:50%; background:#2563eb; flex-shrink:0; }
-  .tk-eye { border:none; background:#e2e8f0; color:#64748b; width:24px; height:24px; border-radius:50%; font-size:0.75rem; cursor:pointer; flex-shrink:0; display:flex; align-items:center; justify-content:center; padding:0; }
-  .tk-eye.unread { background:#2563eb; color:#fff; box-shadow:0 0 0 3px rgba(37,99,235,0.18); }
+  .tk-seen { display:inline-flex; align-items:center; justify-content:center; font-size:1rem; font-weight:800; cursor:pointer; color:#cbd5e1; letter-spacing:-2px; flex-shrink:0; min-width:20px; }
+  .tk-seen.seen { color:#2563eb; }
 
   .empty-state { text-align:center; padding:50px 20px; color:#94a3b8; font-size:0.9rem; }
 
@@ -123,7 +123,19 @@ Firebase Realtime Database يخزّن فقط: التذاكر، الرسائل ا
 
   .closed-banner { text-align:center; padding:10px; font-size:0.78rem; color:#64748b; background:#eef2f8; }
 
-  @media (max-width:640px) { .tk-time { display:none; } .msg { max-width:88%; } }
+  @media (max-width:640px) {
+    .tk-time { display:none; }
+    .msg { max-width:88%; }
+    /* Ticket header was wrapping unpredictably on phones (back button,
+       status pill, and close button colliding with the ticket info).
+       Force it into two clean rows: controls on top, info below. */
+    .chat-head { align-items:center; }
+    .chat-head-back { order:1; }
+    .chat-head-status { order:2; margin-inline-start:auto; }
+    .chat-head #chToggleBtn { order:3; }
+    .chat-head-info { order:4; flex-basis:100%; }
+    .chat-head-order-row { flex-wrap:wrap; }
+  }
 
   /* Desktop / larger screens — the smaller mobile-first sizes read as too
      thin and small on a real monitor, so bump size + weight past 640px. */
@@ -137,10 +149,10 @@ Firebase Realtime Database يخزّن فقط: التذاكر، الرسائل ا
     #chatText { font-size:0.98rem; }
   }
 
-  .msg-seen { display:inline-flex; align-items:center; margin-inline-start:5px; font-size:0.95rem; font-weight:800; line-height:1; opacity:.8; color:rgba(255,255,255,0.8); letter-spacing:-2px; vertical-align:middle; }
+  .msg-seen { display:inline-flex; align-items:center; margin-inline-start:5px; font-size:0.95rem; font-weight:800; line-height:1; opacity:.8; color:rgba(255,255,255,0.8); letter-spacing:-2px; vertical-align:middle; cursor:pointer; }
   .msg-seen.seen { color:#5ec2ff; opacity:1; text-shadow:0 0 3px rgba(94,194,255,0.5); }
-  .msg-seen-list { border:none; background:rgba(37,99,235,0.1); color:#2563eb; border-radius:10px; padding:1px 8px; font-size:0.66rem; font-weight:700; cursor:pointer; margin-inline-start:6px; font-family:inherit; }
-  .msg.mine .msg-seen-list { background:rgba(255,255,255,0.18); color:#fff; }
+  .msg.theirs .msg-seen { color:#94a3b8; }
+  .msg.theirs .msg-seen.seen { color:#2563eb; text-shadow:none; }
   .btn-sm.active { outline:2px solid #0c1a30; outline-offset:-2px; }
 </style>
 </head>
@@ -180,7 +192,7 @@ Firebase Realtime Database يخزّن فقط: التذاكر، الرسائل ا
         <option value="out">مرسلة من قسمي</option>
       </select>
       <button class="btn-sm btn-gray" id="archiveToggleBtn" onclick="toggleArchiveView()" title="التذاكر المغلقة منذ أكثر من ساعة">📦 الأرشيف</button>
-      <button class="btn-sm btn-gray" onclick="openGeneralScreen()" title="قناة تصل لكل الأقسام، وتُسجَّل هوية ووقت كل من يشاهد كل رسالة">📢 دردشة عامة</button>
+      <button class="btn-sm btn-gray" onclick="openGeneralScreen()" title="قناة دردشة مع كل الأقسام، وتُسجَّل هوية ووقت كل من يشاهد كل رسالة">📢 دردشة عامة</button>
     </div>
     <button class="btn-sm btn-blue" onclick="openNewTicketModal()">+ تذكرة جديدة</button>
   </div>
@@ -258,7 +270,7 @@ Firebase Realtime Database يخزّن فقط: التذاكر، الرسائل ا
     <button class="chat-head-back" onclick="closeGeneralScreen()">→ رجوع</button>
     <div class="chat-head-info">
       <div class="chat-head-num">📢 دردشة عامة</div>
-      <div class="chat-head-sub">قناة تصل لكل الأقسام — اضغط 👁 تحت أي رسالة لمعرفة من شاهدها ومتى</div>
+      <div class="chat-head-sub">قناة دردشة مع كل الأقسام — اضغط علامة الصح تحت أي رسالة لمعرفة من شاهدها ومتى</div>
     </div>
   </div>
   <div class="chat-body" id="genChBody"></div>
@@ -266,7 +278,7 @@ Firebase Realtime Database يخزّن فقط: التذاكر، الرسائل ا
     <input type="file" id="genFileInput" accept="image/*,audio/*,.pdf,.doc,.docx" style="display:none" onchange="onGenFilePicked(event)">
     <button class="icon-btn" title="إرفاق ملف" onclick="document.getElementById('genFileInput').click()">📎</button>
     <button class="icon-btn" id="genMicBtn" title="تسجيل صوتي" onclick="toggleGenRecording()">🎤</button>
-    <textarea id="genChatText" placeholder="اكتب تعميماً يصل لجميع الأقسام..." rows="1" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendGenTextMessage();}"></textarea>
+    <textarea id="genChatText" placeholder="اكتب شيء..." rows="1" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendGenTextMessage();}"></textarea>
     <button class="icon-btn send" title="إرسال" onclick="sendGenTextMessage()">➤</button>
   </div>
   <div class="upload-progress" id="genUploadProgress"></div>
@@ -306,8 +318,13 @@ let myWorkspaceOwner = null;
 let isAdmin = false;
 let myUid = null;
 let myDisplayName = '';
-let myOwnDepartment = '';   // department this staff member belongs to
-let canSeeAllDepts = false; // admins / delegated admins see every ticket
+let myOwnDepartment = '';   // department this staff member belongs to (display string, may list several)
+let myOwnDepartments = [];  // parsed list — a member can be assigned to more than one department
+let canSeeAllDepts = false; // admins / delegated admins / managers see every ticket
+
+function parseDepartments(str) {
+  return (str || '').split(/[,،]/).map(s => s.trim()).filter(Boolean);
+}
 
 function computeMemberSystems(p) {
   if (p.systems) {
@@ -349,8 +366,9 @@ fbAuth.onAuthStateChanged(function (user) {
           showNotice('🚫 ليس لديك صلاحية الوصول إلى نظام التذاكر. تواصل مع المشرف.');
           return;
         }
-        canSeeAllDepts = sys.admin === 'edit';
+        canSeeAllDepts = sys.admin === 'edit' || sys.tickets === 'manager';
         myOwnDepartment = (p.department || '').trim();
+        myOwnDepartments = parseDepartments(p.department);
         myDisplayName = p.name || p.phone || '';
         boot();
       });
@@ -451,7 +469,7 @@ function renderList() {
   // side they sent it or the side it was sent to. Admins/delegated admins
   // (canSeeAllDepts) see every ticket across every department.
   if (!canSeeAllDepts) {
-    arr = arr.filter(t => t.fromDept === myOwnDepartment || t.toDept === myOwnDepartment);
+    arr = arr.filter(t => myOwnDepartments.includes(t.fromDept) || myOwnDepartments.includes(t.toDept));
   }
   arr = arr.filter(t => {
     // Tickets closed for 1h+ live only in the archive view, not the main
@@ -462,8 +480,8 @@ function renderList() {
     if (q && !(t.ticketNumber || '').toUpperCase().includes(q) && !(t.orderNumber || '').toUpperCase().includes(q)) return false;
     if (statusF && t.status !== statusF) return false;
     if (deptF && t.toDept !== deptF && t.fromDept !== deptF) return false;
-    if (scopeF === 'in' && t.toDept !== myOwnDepartment) return false;
-    if (scopeF === 'out' && t.fromDept !== myOwnDepartment) return false;
+    if (scopeF === 'in' && !myOwnDepartments.includes(t.toDept)) return false;
+    if (scopeF === 'out' && !myOwnDepartments.includes(t.fromDept)) return false;
     return true;
   });
   const isUnread = t => (t.updatedAt || 0) > (lastReadAt[t.id] || 0) && t.lastSenderUid !== myUid;
@@ -499,9 +517,10 @@ function renderList() {
   }
   list.innerHTML = arr.map(t => {
     const unread = isUnread(t);
+    const hasViewers = t.viewers && Object.keys(t.viewers).length > 0;
     return `
     <div class="tk-row" onclick="openTicketScreen('${t.id}')">
-      <button class="tk-eye ${unread ? 'unread' : ''}" onclick="event.stopPropagation(); openTicketViewersModal('${t.id}')" title="من فتح هذه التذكرة ومتى">👁</button>
+      <span class="tk-seen ${hasViewers ? 'seen' : ''}" onclick="event.stopPropagation(); openTicketViewersModal('${t.id}')" title="من فتح هذه التذكرة ومتى">${hasViewers ? '✓✓' : '✓'}</span>
       <span class="tk-num">#${escapeHtml(t.ticketNumber || '')}</span>
       <div class="tk-mid">
         <div class="tk-route">${escapeHtml(t.fromDept || '')} <span class="tk-arrow">←</span> ${escapeHtml(t.toDept || '')}</div>
@@ -616,7 +635,7 @@ function submitNewTicket() {
 // ═══════════════════════════════════════════════════════════════
 function openTicketScreen(id) {
   const t = tickets[id];
-  if (!canSeeAllDepts && t && t.fromDept !== myOwnDepartment && t.toDept !== myOwnDepartment) {
+  if (!canSeeAllDepts && t && !myOwnDepartments.includes(t.fromDept) && !myOwnDepartments.includes(t.toDept)) {
     alert('🚫 هذه التذكرة تخص قسماً آخر، لا يمكنك فتحها');
     return;
   }
@@ -936,7 +955,7 @@ function renderGenMessages(msgs) {
     return `<div class="msg ${mine ? 'mine' : 'theirs'}">
       <div class="msg-sender">${escapeHtml(m.senderName)} · ${escapeHtml(m.dept || '')}</div>
       ${inner}
-      <div class="msg-time">${formatTime(m.createdAt)}<button class="msg-seen-list" onclick="openMsgViewersModal('${m.id}')" title="من شاهد هذه الرسالة">👁 ${readCount}</button></div>
+      <div class="msg-time">${formatTime(m.createdAt)}<span class="msg-seen ${readCount > 0 ? 'seen' : ''}" onclick="event.stopPropagation(); openMsgViewersModal('${m.id}')" title="من شاهد هذه الرسالة">${readCount > 0 ? '✓✓' : '✓'}</span></div>
     </div>`;
   }).join('') || '<div class="empty-state" style="padding:30px">لا توجد تعميمات بعد — ابدأ أول رسالة</div>';
 

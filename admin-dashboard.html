@@ -530,10 +530,18 @@ tr:hover td { background: #fafafa; }
 </select>
 </div>
 <div class="form-group">
-<label class="form-label">لوحة تحكم المشرف</label>
+<label class="form-label">لوحة تحكم المشرف <span style="font-weight:400;color:#64748b;font-size:0.75rem">(تمنح رؤية تذاكر كل الأقسام)</span></label>
 <select id="newAcctSysAdmin">
 <option value="none">لا يوجد وصول</option>
 <option value="edit">صلاحية كاملة</option>
+</select>
+</div>
+<div class="form-group">
+<label class="form-label">نظام التذاكر</label>
+<select id="newAcctSysTickets">
+<option value="none">لا يوجد وصول</option>
+<option value="employee">موظف — تذاكر قسمه فقط (حسب حقل القسم)</option>
+<option value="manager">مدير — تذاكر كل الأقسام</option>
 </select>
 </div>
 </div>
@@ -786,8 +794,9 @@ const DEPT_LABELS = { view: 'عرض، لقسمه فقط', edit: 'تعديل، ل
 parts.push('متابعة الحضور (' + (DEPT_LABELS[sys.departments] || sys.departments) + ')');
 }
 if (sys.badala !== 'none') parts.push('البدالة (' + (sys.badala === 'edit' ? 'إدارة البدالات' : 'استخدام') + ')');
-if (sys.tickets !== 'none') parts.push('التذاكر');
-if (sys.admin === 'edit') parts.push('لوحة المشرف');
+if (sys.tickets === 'manager') parts.push('التذاكر (مدير — كل الأقسام)');
+else if (sys.tickets !== 'none') parts.push('التذاكر (موظف — قسمه فقط)');
+if (sys.admin === 'edit') parts.push('لوحة المشرف — يرى تذاكر كل الأقسام');
 return parts.length ? parts.join(' | ') : 'بدون أي صلاحية نظام بعد';
 }
 
@@ -1002,11 +1011,12 @@ const permsHTML = p.isAdmin ? '' : `
 <option value="view" ${sys.badala==='view'?'selected':''}>البدالة: استخدام فقط</option>
 <option value="edit" ${sys.badala==='edit'?'selected':''}>البدالة: إدارة البدالات</option>
 </select>
-<select onchange="setMemberSystem('${uid}', 'tickets', this.value)" style="padding:4px;font-size:0.74rem;" title="نظام التذاكر">
+<select onchange="setMemberSystem('${uid}', 'tickets', this.value)" style="padding:4px;font-size:0.74rem;" title="نظام التذاكر — موظف: يرى تذاكر قسمه (من 'القسم' أدناه) فقط. مدير: يرى تذاكر كل الأقسام">
 <option value="none" ${sys.tickets==='none'?'selected':''}>التذاكر: بدون</option>
-<option value="edit" ${sys.tickets==='edit'?'selected':''}>التذاكر: مفعّل</option>
+<option value="employee" ${sys.tickets==='employee'?'selected':''}>التذاكر: موظف (قسمه فقط)</option>
+<option value="manager" ${sys.tickets==='manager'?'selected':''}>التذاكر: مدير (كل الأقسام)</option>
 </select>
-<select onchange="setMemberSystem('${uid}', 'admin', this.value)" style="padding:4px;font-size:0.74rem;" title="لوحة المشرف">
+<select onchange="setMemberSystem('${uid}', 'admin', this.value)" style="padding:4px;font-size:0.74rem;" title="لوحة المشرف — يمنحه أيضاً رؤية تذاكر كل الأقسام في نظام التذاكر">
 <option value="none" ${sys.admin==='none'?'selected':''}>المشرف: بدون</option>
 <option value="edit" ${sys.admin==='edit'?'selected':''}>المشرف: كاملة</option>
 </select>`;
@@ -1887,7 +1897,8 @@ matabaa: document.getElementById('newAcctSysMatabaa')?.value || 'none',
 hr: document.getElementById('newAcctSysHR')?.value || 'none',
 manager: document.getElementById('newAcctSysManager')?.value || 'none',
 accounts: document.getElementById('newAcctSysAccounts')?.value || 'none',
-admin: document.getElementById('newAcctSysAdmin')?.value || 'none'
+admin: document.getElementById('newAcctSysAdmin')?.value || 'none',
+tickets: document.getElementById('newAcctSysTickets')?.value || 'none'
 };
 
 statusEl.style.color = '#475569';
