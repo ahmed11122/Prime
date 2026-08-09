@@ -1000,7 +1000,7 @@ body.dark-theme #targetEvening { background: #263447 !important; color: #e2e8f0 
     </button>
     <button id="managerSystemBtn" onclick="chooseManagerPortal()" class="clay-sys-card clay-accent-purple" style="display:none">
       <div class="clay-sys-title">بوابة المدير</div>
-      <div class="clay-sys-desc">مقتطف يومي سريع عن حالة الموظفين والإجازات،</div>
+      <div class="clay-sys-desc">مقتطف يومي سريع عن حالة الموظفين والإجازات، مع إمكانية الموافقة أو الرفض على طلبات الإجازة إذا مُنحت هذه الصلاحية</div>
     </button>
     <button onclick="chooseMatabaaSystem()" id="matabaaSystemBtn" class="clay-sys-card clay-accent-blue" style="display:none">
       <div class="clay-sys-title">نظام قسم المتابعة</div>
@@ -1020,14 +1020,14 @@ body.dark-theme #targetEvening { background: #263447 !important; color: #e2e8f0 
     </button>
     <button id="departmentsSystemBtn" onclick="chooseDepartmentsSystem()" class="clay-sys-card clay-accent-teal" style="display:none">
       <div class="clay-sys-title">متابعة الحضور</div>
-      <div class="clay-sys-desc">جدول حضور يومي لكل قسم </div>
+      <div class="clay-sys-desc">جدول حضور يومي لكل قسم على حدة — حاضر، اجازة، غياب، اوف — بصلاحيات مدير كل قسم</div>
     </button>
     <button id="ticketsSystemBtn" onclick="chooseTicketsSystem()" class="clay-sys-card clay-accent-teal" style="display:none">
-      <div class="clay-sys-title">نظام التذاكر</div>
-      <div class="clay-sys-desc">طلبات بين الأقسام — تسجيلات مكالمات، صور، ومتابعة الطلبات</div>
+      <div class="clay-sys-title">🎫 نظام التذاكر</div>
+      <div class="clay-sys-desc">طلبات بين الأقسام — تسجيلات مكالمات، صور، ومتابعة الطلبات بدل ضياعها بالواتساب</div>
     </button>
     <button id="badalaSystemBtn" onclick="chooseBadalaSystem()" class="clay-sys-card clay-accent-rose" style="display:none">
-      <div class="clay-sys-title">نظام البدالة</div>
+      <div class="clay-sys-title">☎️ نظام البدالة</div>
       <div class="clay-sys-desc">فتح وإغلاق البدالات، مع منع استخدام نفس البدالة من أكثر من موظف بنفس الوقت</div>
     </button>
     <button id="selfServiceSystemBtn" onclick="chooseSelfServicePortal()" class="clay-sys-card clay-accent-purple" style="display:none">
@@ -1224,6 +1224,37 @@ function showSystemChooser(fn) {
   // in — instead of waiting until they pick "نظام قسم المتابعة".
   registerForPushNotifications();
   if (typeof updateLastSavedIndicator === 'function') updateLastSavedIndicator();
+
+  // FIX: reload used to always dump the person back at this chooser screen,
+  // even though they were already deep inside a system — it looked like a
+  // logout/login round-trip. If the account is still allowed into the last
+  // system it had open, jump straight back into it instead of showing the
+  // chooser. Guarded by the same access checks each choose*() function
+  // already performs, so a revoked permission just falls through to the
+  // chooser normally.
+  const lastSystem = localStorage.getItem('lastSystem');
+  if (lastSystem) {
+    const reopeners = {
+      matabaa: () => (isAdmin || mySystems.matabaa !== 'none') && chooseMatabaaSystem(),
+      hr: () => (isAdmin || mySystems.hr === 'full') && chooseHRSystem(),
+      manager: () => (isAdmin || mySystems.manager !== 'none') && chooseManagerPortal(),
+      accounts: () => (isAdmin || myAccountsAccessLevel !== 'none') && chooseAccountsSystem(),
+      sales: () => (isAdmin || mySystems.sales !== 'none') && chooseSalesSystem(),
+      departments: () => (isAdmin || mySystems.departments !== 'none') && chooseDepartmentsSystem(),
+      tickets: () => (isAdmin || mySystems.tickets !== 'none') && chooseTicketsSystem(),
+      badala: () => (isAdmin || mySystems.badala !== 'none') && chooseBadalaSystem(),
+      admin: () => canUseAdminDashboard() && chooseAdminDashboard(),
+      selfService: () => mySystems.selfService && chooseSelfServicePortal()
+    };
+    const reopener = reopeners[lastSystem];
+    if (reopener) {
+      const reopened = reopener();
+      if (reopened) return; // successfully jumped back in — don't show the chooser
+    }
+    // Access no longer allowed (or unknown key) — forget it and fall through
+    // to showing the chooser normally.
+    localStorage.removeItem('lastSystem');
+  }
 }
 
 // Every tile below is now fully HIDDEN — not just dimmed — when the
@@ -1321,7 +1352,9 @@ function chooseHRSystem() {
     hrFrameLoaded = true;
   }
   document.getElementById('hrLeaveScreen').style.display = 'flex';
+  localStorage.setItem('lastSystem', 'hr');
   if (typeof updateLastSavedIndicator === 'function') updateLastSavedIndicator();
+  return true;
 }
 
 // 🧑‍💼 بوابة المدير — independent grantable access, separate from the full
@@ -1335,7 +1368,9 @@ function chooseManagerPortal() {
   myCanApprove = isAdmin ? true : (mySystems.manager === 'approve');
   document.getElementById('systemChooser').style.display = 'none';
   finishManagerBoot();
+  localStorage.setItem('lastSystem', 'manager');
   if (typeof updateLastSavedIndicator === 'function') updateLastSavedIndicator();
+  return true;
 }
 
 let accountsFrameLoaded = false;
@@ -1362,12 +1397,15 @@ function chooseAccountsSystem() {
     accountsFrameLoaded = true;
   }
   document.getElementById('accountsFollowScreen').style.display = 'flex';
+  localStorage.setItem('lastSystem', 'accounts');
   if (typeof updateLastSavedIndicator === 'function') updateLastSavedIndicator();
+  return true;
 }
 
 function backToChooserFromAccounts() {
   document.getElementById('accountsFollowScreen').style.display = 'none';
   document.getElementById('systemChooser').style.display = 'flex';
+  localStorage.removeItem('lastSystem');
   if (typeof updateLastSavedIndicator === 'function') updateLastSavedIndicator();
 }
 
@@ -1403,12 +1441,15 @@ function chooseSalesSystem() {
     overlay.style.display = 'none';
   }
   document.getElementById('salesScreen').style.display = 'flex';
+  localStorage.setItem('lastSystem', 'sales');
   if (typeof updateLastSavedIndicator === 'function') updateLastSavedIndicator();
+  return true;
 }
 
 function backToChooserFromSales() {
   document.getElementById('salesScreen').style.display = 'none';
   document.getElementById('systemChooser').style.display = 'flex';
+  localStorage.removeItem('lastSystem');
   if (typeof updateLastSavedIndicator === 'function') updateLastSavedIndicator();
 }
 
@@ -1426,12 +1467,15 @@ function chooseDepartmentsSystem() {
     departmentsFrameLoaded = true;
   }
   document.getElementById('departmentsScreen').style.display = 'flex';
+  localStorage.setItem('lastSystem', 'departments');
   if (typeof updateLastSavedIndicator === 'function') updateLastSavedIndicator();
+  return true;
 }
 
 function backToChooserFromDepartments() {
   document.getElementById('departmentsScreen').style.display = 'none';
   document.getElementById('systemChooser').style.display = 'flex';
+  localStorage.removeItem('lastSystem');
   if (typeof updateLastSavedIndicator === 'function') updateLastSavedIndicator();
 }
 
@@ -1449,12 +1493,15 @@ function chooseTicketsSystem() {
     ticketsFrameLoaded = true;
   }
   document.getElementById('ticketsScreen').style.display = 'flex';
+  localStorage.setItem('lastSystem', 'tickets');
   if (typeof updateLastSavedIndicator === 'function') updateLastSavedIndicator();
+  return true;
 }
 
 function backToChooserFromTickets() {
   document.getElementById('ticketsScreen').style.display = 'none';
   document.getElementById('systemChooser').style.display = 'flex';
+  localStorage.removeItem('lastSystem');
   if (typeof updateLastSavedIndicator === 'function') updateLastSavedIndicator();
 }
 
@@ -1488,12 +1535,15 @@ function chooseBadalaSystem() {
     badalaFrameLoaded = true;
   }
   document.getElementById('badalaScreen').style.display = 'flex';
+  localStorage.setItem('lastSystem', 'badala');
   if (typeof updateLastSavedIndicator === 'function') updateLastSavedIndicator();
+  return true;
 }
 
 function backToChooserFromBadala() {
   document.getElementById('badalaScreen').style.display = 'none';
   document.getElementById('systemChooser').style.display = 'flex';
+  localStorage.removeItem('lastSystem');
   if (typeof updateLastSavedIndicator === 'function') updateLastSavedIndicator();
 }
 
@@ -1507,6 +1557,8 @@ function chooseSelfServicePortal() {
   }
   document.getElementById('systemChooser').style.display = 'none';
   finishEmployeeBoot();
+  localStorage.setItem('lastSystem', 'selfService');
+  return true;
 }
 
 // Brings a self-service employee back from their portal to the system
@@ -1515,6 +1567,7 @@ function chooseSelfServicePortal() {
 function backToChooserFromEmployeePortal() {
   document.getElementById('employeeApp').style.display = 'none';
   document.getElementById('systemChooser').style.display = 'flex';
+  localStorage.removeItem('lastSystem');
   if (typeof updateLastSavedIndicator === 'function') updateLastSavedIndicator();
 }
 
@@ -1531,7 +1584,9 @@ function chooseMatabaaSystem() {
  // system) — just re-show the متابعة screens that are already booted.
  document.getElementById('welcome').style.display = 'flex';
  }
+ localStorage.setItem('lastSystem', 'matabaa');
  if (typeof updateLastSavedIndicator === 'function') updateLastSavedIndicator();
+ return true;
 }
 
 let adminFrameLoaded = false;
@@ -1562,18 +1617,22 @@ function chooseAdminDashboard() {
  overlay.style.display = 'none';
  }
  document.getElementById('adminDashboardScreen').style.display = 'flex';
+ localStorage.setItem('lastSystem', 'admin');
  if (typeof updateLastSavedIndicator === 'function') updateLastSavedIndicator();
+ return true;
 }
 
 function backToChooserFromAdmin() {
  document.getElementById('adminDashboardScreen').style.display = 'none';
  document.getElementById('systemChooser').style.display = 'flex';
+ localStorage.removeItem('lastSystem');
  if (typeof updateLastSavedIndicator === 'function') updateLastSavedIndicator();
 }
 
 function backToChooser() {
  document.getElementById('hrLeaveScreen').style.display = 'none';
  document.getElementById('systemChooser').style.display = 'flex';
+ localStorage.removeItem('lastSystem');
  if (typeof updateLastSavedIndicator === 'function') updateLastSavedIndicator();
 }
 
@@ -1581,6 +1640,7 @@ function backToChooserFromMatabaa() {
   document.getElementById('welcome').style.display = 'none';
   document.getElementById('app').style.display = 'none';
   document.getElementById('systemChooser').style.display = 'flex';
+  localStorage.removeItem('lastSystem');
   if (typeof updateLastSavedIndicator === 'function') updateLastSavedIndicator();
 }
 </script>
@@ -7043,6 +7103,24 @@ function doLogout() {
     adminFrameLoaded = false;
     pendingBootFn = null;
     document.getElementById('loginScreen').style.display = 'flex';
+    // FIX: doLogin() intentionally leaves the button stuck on "جاري تسجيل
+    // الدخول..." after a successful sign-in (to avoid a flicker before the
+    // screen swaps away). Without resetting it here, the next time someone
+    // lands back on the login screen after logging out, the button is still
+    // disabled from the PREVIOUS login and looks frozen. Reset it, clear the
+    // fields, and clear any stuck in-flight flag so login works immediately.
+    setLoginBusy(false);
+    loginInFlight = false;
+    const loginEmailEl = document.getElementById('loginEmail');
+    const loginPasswordEl = document.getElementById('loginPassword');
+    if (loginEmailEl) loginEmailEl.value = '';
+    if (loginPasswordEl) loginPasswordEl.value = '';
+    const loginErrEl = document.getElementById('loginError');
+    if (loginErrEl) loginErrEl.textContent = '';
+    // FIX: forget which system was open, so the next login starts fresh at
+    // the chooser instead of trying to auto-reopen the system this account
+    // was just using.
+    localStorage.removeItem('lastSystem');
     if (typeof updateLastSavedIndicator === 'function') updateLastSavedIndicator();
   } catch (e) { console.log('UI reset on logout failed', e); }
 
