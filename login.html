@@ -1968,8 +1968,7 @@ function backToChooserFromMatabaa() {
 <div id="employeeApp">
   <div class="ep-hero">
     <div class="ep-hero-top" style="justify-content:space-between;width:100%">
-      <button class="ep-logout" onclick="doLogout()">🚪 خروج</button>
-      <button class="ep-logout" id="epBackToChooserBtn" onclick="backToChooserFromEmployeePortal()" style="display:none">↩️ الأنظمة</button>
+      <button class="ep-logout" id="epBackToChooserBtn" onclick="backToChooserFromEmployeePortal()">↩️ الرجوع الى الانظمة</button>
       <button class="ep-logout" id="epQuoteBtn" onclick="handleQuoteButtonClick()">🌟 حكمة اليوم</button>
     </div>
     <div class="ep-greeting">
@@ -5708,9 +5707,7 @@ function finishEmployeeBoot() {
 
   const backBtn = document.getElementById('epBackToChooserBtn');
   if (backBtn) {
-    const hasOtherSystem = [mySystems.matabaa, mySystems.hr, mySystems.manager, mySystems.accounts,
-      mySystems.admin, mySystems.sales, mySystems.departments, mySystems.badala, mySystems.tickets].some(v => v && v !== 'none');
-    backBtn.style.display = hasOtherSystem ? '' : 'none';
+    backBtn.style.display = '';
   }
 
   document.getElementById('epEmployeeName').textContent = myEmployeeName || '';
@@ -6685,14 +6682,35 @@ const DAILY_QUOTES_LIST = [
   "أنت أقوى مما تتخيل، وكل تحد اليوم يبني نجاحك غداً",
   "أنت لا تنافس الآخرين، أنت تبني أفضل نسخة من نفسك",
   "لا تسمح ليوم صعب أن يسرق منك حلمك الكبير.",
-  "وراء كل موظف ناجح ... منبه لا يرحمه⏰️💔"
+  "وراء كل موظف ناجح ... منبه لا يرحمه⏰️💔",
+  "مجهودك اليوم قد لا يُرى فورًا، لكنه لا يضيع أبدًا.",
+  "أنت لست وحدك، فريقك يقف معك في كل خطوة.",
+  "الاستراحة القصيرة ليست كسلًا، بل وقود لإكمال يومك بقوة.",
+  "خطأ بسيط اليوم هو درس يجعلك أفضل غدًا، فلا تكن قاسيًا على نفسك.",
+  "شكرًا لأنك تأتي كل يوم وتبذل ما تستطيع، هذا يُحدث فرقًا.",
+  "لست مضطرًا أن تكون مثاليًا، يكفي أن تكون صادقًا في محاولتك.",
+  "خذ نفسًا عميقًا... أنت تقوم بعمل أفضل مما تظن.",
+  "التعب علامة أنك تبذل جهدًا حقيقيًا، وليس علامة ضعف.",
+  "يوم صعب لا يعني حياة صعبة، غدًا صفحة جديدة.",
+  "إنجازك الصغير اليوم هو أساس نجاحك الكبير غدًا."
 ];
 const DAILY_QUOTE_COOLDOWN_MS = 24 * 60 * 60 * 1000;
+
+// The self-service portal can be used by more than one employee under the
+// same logged-in account (e.g. shared device/login), so the quote's
+// "seen/cooldown" state must be keyed per-employee, not just per-account —
+// otherwise one employee pressing the button starts the 24h cooldown for
+// every other employee sharing that login too.
+function dailyQuoteStateKey() {
+  const raw = myEmployeeCardId || myEmployeeName || 'default';
+  const safe = String(raw).replace(/[.#$\[\]\/]/g, '_').trim();
+  return 'dailyQuoteState/' + (safe || 'default');
+}
 
 async function handleQuoteButtonClick() {
   let state = null;
   try {
-    const snap = await fbDB.ref(dbPath('dailyQuoteState')).once('value');
+    const snap = await fbDB.ref(dbPath(dailyQuoteStateKey())).once('value');
     state = snap.val();
   } catch (e) {
     console.log('could not read dailyQuoteState', e);
@@ -6721,7 +6739,7 @@ async function handleQuoteButtonClick() {
 
   const newState = { usedIndices, lastShownAt: now };
   try {
-    await fbDB.ref(dbPath('dailyQuoteState')).set(newState);
+    await fbDB.ref(dbPath(dailyQuoteStateKey())).set(newState);
   } catch (e) {
     console.log('could not save dailyQuoteState', e);
   }
