@@ -805,7 +805,7 @@ body.dark-theme #targetEvening { background: #263447 !important; color: #e2e8f0 
 <!-- ══════════════════════════════════════════════════════════ -->
 <!--  LOGIN SCREEN                                              -->
 <!-- ══════════════════════════════════════════════════════════ -->
-<div id="loginScreen" class="clay-login">
+<div id="loginScreen" class="clay-login" style="display:none">
   <div class="clay-blob clay-blob-1" aria-hidden="true"></div>
   <div class="clay-blob clay-blob-2" aria-hidden="true"></div>
   <div class="clay-blob clay-blob-3" aria-hidden="true"></div>
@@ -976,7 +976,7 @@ body.dark-theme #targetEvening { background: #263447 !important; color: #e2e8f0 
 <!--  AUTH LOADING SCREEN (shown while we verify admin/member    -->
 <!--  status right after login, to avoid a blank white screen)   -->
 <!-- ══════════════════════════════════════════════════════════ -->
-<div id="authLoadingScreen" style="display:none;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;background:#0c1a30;gap:16px">
+<div id="authLoadingScreen" style="display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;background:#0c1a30;gap:16px">
   <div style="width:48px;height:48px;border:4px solid rgba(255,255,255,0.25);border-top-color:#fff;border-radius:50%;animation:authSpin 0.8s linear infinite"></div>
   <div style="color:#fff;font-size:0.95rem;font-weight:600">جارِ التحقق من الحساب...</div>
 </div>
@@ -1000,7 +1000,7 @@ body.dark-theme #targetEvening { background: #263447 !important; color: #e2e8f0 
     </button>
     <button id="managerSystemBtn" onclick="chooseManagerPortal()" class="clay-sys-card clay-accent-purple" style="display:none">
       <div class="clay-sys-title">بوابة المدير</div>
-      <div class="clay-sys-desc">مقتطف يومي سريع عن حالة الموظفين والإجازات</div>
+      <div class="clay-sys-desc">مقتطف يومي سريع عن حالة الموظفين والإجازات، مع إمكانية الموافقة أو الرفض على طلبات الإجازة إذا مُنحت هذه الصلاحية</div>
     </button>
     <button onclick="chooseMatabaaSystem()" id="matabaaSystemBtn" class="clay-sys-card clay-accent-blue" style="display:none">
       <div class="clay-sys-title">نظام قسم المتابعة</div>
@@ -1020,18 +1020,18 @@ body.dark-theme #targetEvening { background: #263447 !important; color: #e2e8f0 
     </button>
     <button id="departmentsSystemBtn" onclick="chooseDepartmentsSystem()" class="clay-sys-card clay-accent-teal" style="display:none">
       <div class="clay-sys-title">متابعة الحضور</div>
-      <div class="clay-sys-desc">جدول حضور يومي لكل قسم على حدة — حاضر، اجازة، غياب، اوف</div>
+      <div class="clay-sys-desc">جدول حضور يومي لكل قسم على حدة — حاضر، اجازة، غياب، اوف — بصلاحيات مدير كل قسم</div>
     </button>
     <button id="ticketsSystemBtn" onclick="chooseTicketsSystem()" class="clay-sys-card clay-accent-teal" style="display:none">
-      <div class="clay-sys-title">نظام التذاكر</div>
-      <div class="clay-sys-desc">طلبات بين الأقسام — تسجيلات مكالمات، صور</div>
+      <div class="clay-sys-title">🎫 نظام التذاكر</div>
+      <div class="clay-sys-desc">طلبات بين الأقسام — تسجيلات مكالمات، صور، ومتابعة الطلبات بدل ضياعها بالواتساب</div>
     </button>
     <button id="badalaSystemBtn" onclick="chooseBadalaSystem()" class="clay-sys-card clay-accent-rose" style="display:none">
-      <div class="clay-sys-title">نظام البدالة</div>
+      <div class="clay-sys-title">☎️ نظام البدالة</div>
       <div class="clay-sys-desc">فتح وإغلاق البدالات، مع منع استخدام نفس البدالة من أكثر من موظف بنفس الوقت</div>
     </button>
     <button id="selfServiceSystemBtn" onclick="chooseSelfServicePortal()" class="clay-sys-card clay-accent-purple" style="display:none">
-      <div class="clay-sys-title">بوابة ذاتية</div>
+      <div class="clay-sys-title">👤 بوابة ذاتية</div>
       <div class="clay-sys-desc">تقديم طلبات الإجازة والزمنية، ومتابعة رصيدك وحالة طلباتك الخاصة</div>
     </button>
   </div>
@@ -1159,7 +1159,7 @@ body.dark-theme #targetEvening { background: #263447 !important; color: #e2e8f0 
 <div id="badalaScreen" style="display:none;position:fixed;inset:0;z-index:9000;background:#eef2f7;flex-direction:column">
   <div style="display:flex;align-items:center;justify-content:space-between;background:#16283d;color:#f3ecd8;padding:10px 18px;font-family:inherit" dir="rtl">
     <button onclick="backToChooserFromBadala()" style="background:rgba(255,255,255,0.08);border:1px solid rgba(251,113,133,0.5);color:#f3ecd8;padding:7px 16px;border-radius:8px;cursor:pointer;font-family:inherit;font-size:0.85rem">رجوع لاختيار النظام</button>
-    <div style="font-weight:800;font-size:0.95rem">نظام البدالة</div>
+    <div style="font-weight:800;font-size:0.95rem">☎️ نظام البدالة</div>
     <span id="badalaHeaderUserName" style="color:#fff;font-weight:700;font-size:0.85rem;background:rgba(255,255,255,0.12);padding:6px 14px;border-radius:20px;display:none"></span>
   </div>
   <iframe id="badalaIframe" src="" style="border:none;flex:1;width:100%"></iframe>
@@ -7127,7 +7127,21 @@ function doLogout() {
   fbAuth.signOut().catch(err => console.log('signOut failed', err));
 }
 
+// FIX: the page now boots straight into #authLoadingScreen (instead of
+// flashing the login form first) so a page reload while already signed in
+// looks like a normal "just loading" moment, not a logout/login round-trip.
+// Safety net: if Firebase's very first onAuthStateChanged callback never
+// fires (e.g. fully offline on first load), don't leave the person staring
+// at the spinner forever — fall back to the login screen after 10s.
+let authInitResolved = false;
+setTimeout(function () {
+  if (authInitResolved) return;
+  document.getElementById('authLoadingScreen').style.display = 'none';
+  document.getElementById('loginScreen').style.display = 'flex';
+}, 10000);
+
 fbAuth.onAuthStateChanged(function(user) {
+  authInitResolved = true;
   const loginScreen = document.getElementById('loginScreen');
   const welcomeScreen = document.getElementById('welcome');
   const appScreen = document.getElementById('app');
