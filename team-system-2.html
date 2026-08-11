@@ -1,0 +1,1241 @@
+<!--
+نظام متابعة الفريق وحل مشاكل العملاء — Mutabaa
+بوابتان: بوابة رئيس الفريق (يدير موظفيه، إنذارات، متابعة الطلبات)
+وبوابة الموظف (يسجّل الطلبات التي عالجها).
+الأدوار (teamRole) تُحدَّد لاحقاً من لوحة تحكم المشرف على كل عضو:
+  staffMembers/{owner}/{uid}.teamRole = 'leader' | 'employee'
+  staffMembers/{owner}/{uid}.teamLeaderUid = uid رئيس الفريق (للموظف)
+
+Firebase Realtime Database:
+  staffMembers/{owner}/{uid}.orderStats = {total, resolved, unresolved, escalated, totalResponseMs, resolvedWithTime}  (مُجمّعة لعرض سريع)
+  staffMembers/{owner}/{uid}.warningCount
+  teamOrders/{owner}/{employeeUid}/{orderId}   = {orderNumber, note, category, status, createdAt, updatedAt, resolvedAt, responseMs, escalatedAt, escalatedNote}
+  teamWarnings/{owner}/{employeeUid}/{warnId}  = {orderNumber, note, byUid, byName, createdAt}
+
+حالات الطلب (status): resolved | unresolved | escalated
+فئات المشكلة (category): shipping | payment | damaged | delay | inquiry | other
+
+© 2026 أحمد ماجد سجاد. جميع الحقوق محفوظة.
+-->
+<!DOCTYPE html>
+<html dir="rtl" lang="ar">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>نظام ادارة الفريق</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800&display=swap" rel="stylesheet">
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-database-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-auth-compat.js"></script>
+<style>
+  * { box-sizing: border-box; }
+  body { margin:0; font-family:'Tajawal','Segoe UI',Tahoma,Arial,sans-serif; background:#f3f6fa; color:#1e293b; }
+
+  .topbar { display:flex; align-items:center; justify-content:space-between; background:linear-gradient(135deg,#0c1a30,#16283d); color:#fff; padding:14px 20px; box-shadow:0 2px 10px rgba(12,26,48,0.25); }
+  .topbar-back { background:rgba(255,255,255,0.08); border:1px solid rgba(255,255,255,0.25); color:#fff; padding:7px 16px; border-radius:9px; cursor:pointer; font-family:inherit; font-size:0.85rem; transition:background .15s; }
+  .topbar-back:hover { background:rgba(255,255,255,0.16); }
+  .topbar-title { font-weight:800; font-size:1rem; letter-spacing:.2px; }
+  .topbar-user { color:#0c1a30; font-weight:700; font-size:0.85rem; background:#fff; padding:6px 14px; border-radius:20px; }
+
+  #loadingOverlay { display:flex; flex-direction:column; align-items:center; justify-content:center; height:70vh; gap:14px; }
+  .spin { width:46px; height:46px; border:4px solid #dbe4f0; border-top-color:#0c1a30; border-radius:50%; animation:spin .8s linear infinite; }
+  @keyframes spin { to { transform:rotate(360deg); } }
+  #noticeBox { display:none; text-align:center; padding:60px 20px; color:#64748b; font-size:0.95rem; }
+
+  .wrap { display:none; padding:20px; max-width:1100px; margin:0 auto; }
+
+  .toolbar { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:10px; margin-bottom:16px; background:#fff; border:1px solid #e2e8f0; border-radius:12px; padding:10px 14px; }
+  .toolbar-left { display:flex; gap:8px; flex-wrap:wrap; align-items:center; flex:1; }
+  .emp-search { flex:1; min-width:160px; max-width:260px; padding:8px 12px; border:1.5px solid #dbe2ea; border-radius:9px; font-family:inherit; font-size:0.82rem; background:#f8fafc; }
+  .filter-select { padding:8px 10px; border:1.5px solid #dbe2ea; border-radius:9px; font-family:inherit; font-size:0.8rem; background:#f8fafc; color:#334155; cursor:pointer; }
+  .btn-sm { border:none; border-radius:8px; padding:9px 16px; cursor:pointer; font-family:inherit; font-size:0.82rem; font-weight:700; transition:filter .15s; white-space:nowrap; }
+  .btn-sm:hover { filter:brightness(0.95); }
+  .btn-sm:disabled { opacity:.5; cursor:not-allowed; }
+  .btn-blue { background:#0c1a30; color:#fff; }
+  .btn-gray { background:#e2e8f0; color:#334155; }
+  .btn-red { background:#fee2e2; color:#dc2626; }
+  .btn-green { background:#dcfce7; color:#16a34a; }
+  .btn-amber { background:#fef3c7; color:#92400e; }
+
+  .list-card { background:#fff; border-radius:14px; box-shadow:0 4px 18px rgba(15,23,42,0.08); border:1px solid #eef1f5; overflow:hidden; }
+  .empty-state { text-align:center; padding:50px 20px; color:#94a3b8; font-size:0.9rem; }
+
+  /* ── employee row (leader/admin view) ── */
+  .emp-row { display:flex; align-items:center; gap:14px; padding:14px 16px; border-bottom:1px solid #f0f3f8; cursor:pointer; transition:background .12s; }
+  .emp-row:last-child { border-bottom:none; }
+  .emp-row:hover { background:#f8fafc; }
+  .emp-avatar { width:38px; height:38px; border-radius:50%; background:#eef2f8; color:#0c1a30; display:flex; align-items:center; justify-content:center; font-weight:800; font-size:0.95rem; flex-shrink:0; }
+  .emp-mid { flex:1; min-width:0; }
+  .emp-name { font-weight:700; font-size:0.9rem; color:#1e293b; }
+  .emp-sub { font-size:0.76rem; color:#94a3b8; margin-top:2px; }
+  .emp-stats { display:flex; gap:6px; flex-shrink:0; flex-wrap:wrap; justify-content:flex-end; }
+  .pill { font-size:0.72rem; font-weight:800; padding:4px 10px; border-radius:20px; white-space:nowrap; }
+  .pill-total { background:#eef2f8; color:#0c1a30; }
+  .pill-resolved { background:#dcfce7; color:#16a34a; }
+  .pill-unresolved { background:#fef3c7; color:#92400e; }
+  .pill-warn { background:#fee2e2; color:#dc2626; }
+
+  /* ── modal ── */
+  .modal-bg { display:none; position:fixed; inset:0; background:rgba(12,26,48,0.55); z-index:9500; align-items:center; justify-content:center; padding:16px; }
+  .modal-box { background:#fff; border-radius:16px; padding:22px; width:420px; max-width:100%; box-shadow:0 20px 50px rgba(0,0,0,.3); max-height:85vh; overflow-y:auto; }
+  .modal-box h3 { margin:0 0 14px; font-size:1rem; color:#0c1a30; }
+  .modal-box label { display:block; font-size:0.78rem; font-weight:700; color:#475569; margin:12px 0 6px; }
+  .modal-box input, .modal-box select, .modal-box textarea { width:100%; padding:9px 10px; border:1.5px solid #cbd5e1; border-radius:8px; font-family:inherit; font-size:0.88rem; }
+  .modal-box textarea { resize:vertical; min-height:70px; }
+  .modal-btns { display:flex; gap:8px; justify-content:flex-end; margin-top:18px; }
+  .modal-hint { font-size:0.74rem; color:#94a3b8; margin-top:4px; }
+
+  .pick-list { max-height:260px; overflow-y:auto; border:1px solid #eef1f5; border-radius:10px; margin-top:8px; }
+  .pick-row { display:flex; align-items:center; justify-content:space-between; padding:10px 12px; border-bottom:1px solid #f0f3f8; font-size:0.85rem; }
+  .pick-row:last-child { border-bottom:none; }
+  .pick-row-name { font-weight:700; }
+  .pick-row-sub { font-size:0.72rem; color:#94a3b8; }
+
+  /* ── employee detail full screen ── */
+  #empScreen { display:none; position:fixed; inset:0; z-index:9200; background:#f3f6fa; flex-direction:column; overflow-y:auto; }
+  .det-head { background:linear-gradient(135deg,#0c1a30,#16283d); color:#fff; padding:16px; }
+  .det-head-top { display:flex; align-items:center; gap:12px; flex-wrap:wrap; }
+  .det-head-back { background:rgba(255,255,255,0.08); border:1px solid rgba(255,255,255,0.25); color:#fff; padding:6px 14px; border-radius:8px; cursor:pointer; font-family:inherit; font-size:0.8rem; }
+  .det-head-name { font-weight:800; font-size:1.05rem; flex:1; min-width:120px; }
+  .det-head-sub { font-size:0.78rem; opacity:.85; margin-top:6px; }
+  .det-stats-row { display:flex; gap:8px; margin-top:12px; flex-wrap:wrap; }
+  .det-stat { background:rgba(255,255,255,0.1); border:1px solid rgba(255,255,255,0.18); border-radius:10px; padding:8px 14px; text-align:center; min-width:70px; }
+  .det-stat b { display:block; font-size:1.1rem; }
+  .det-stat span { font-size:0.68rem; opacity:.85; }
+
+  .det-actions { display:flex; gap:8px; padding:14px 16px; flex-wrap:wrap; background:#fff; border-bottom:1px solid #e2e8f0; }
+  .det-tabs { display:flex; gap:4px; padding:0 16px; background:#fff; border-bottom:1px solid #e2e8f0; }
+  .det-tab { padding:10px 16px; font-size:0.85rem; font-weight:700; color:#64748b; cursor:pointer; border-bottom:2px solid transparent; }
+  .det-tab.active { color:#0c1a30; border-bottom-color:#0c1a30; }
+  .det-body { padding:16px; }
+
+  .order-card { background:#fff; border:1px solid #eef1f5; border-radius:12px; padding:12px 14px; margin-bottom:10px; display:flex; align-items:center; gap:12px; }
+  .order-mid { flex:1; min-width:0; }
+  .order-num { font-weight:800; color:#0c1a30; font-size:0.88rem; }
+  .order-note { font-size:0.8rem; color:#64748b; margin-top:3px; }
+  .order-time { font-size:0.7rem; color:#94a3b8; margin-top:4px; }
+  .status-badge { font-size:0.72rem; font-weight:800; padding:5px 12px; border-radius:20px; white-space:nowrap; cursor:pointer; border:none; font-family:inherit; }
+  .status-badge.resolved { background:#dcfce7; color:#16a34a; }
+  .status-badge.unresolved { background:#fef3c7; color:#92400e; }
+  .status-badge.escalated { background:#fee2e2; color:#dc2626; }
+  .cat-badge { display:inline-block; font-size:0.7rem; font-weight:700; padding:3px 9px; border-radius:14px; background:#eef2f8; color:#0c1a30; margin-inline-end:6px; }
+  .resp-time { font-size:0.7rem; color:#16a34a; font-weight:700; margin-top:3px; }
+  .esc-note-box { background:#fff5f5; border:1px solid #fecaca; border-radius:9px; padding:8px 10px; margin-top:6px; font-size:0.78rem; color:#7f1d1d; }
+  .solve-note-box { background:#f0fdf4; border:1px solid #bbf7d0; border-radius:9px; padding:8px 10px; margin-top:6px; font-size:0.78rem; color:#166534; }
+  .chip-wrap { display:flex; flex-wrap:wrap; gap:6px; margin:6px 0 4px; }
+  .chip { background:#eef2f8; color:#0c1a30; border:1px solid #dbe2ea; border-radius:20px; padding:5px 12px; font-size:0.74rem; font-weight:700; cursor:pointer; font-family:inherit; transition:background .12s; }
+  .chip:hover { background:#dde5f0; }
+  .chip.chip-add { background:#fff; color:#0c1a30; border:1.5px dashed #94a3b8; }
+  .chip-custom-row { display:flex; gap:6px; margin-top:6px; }
+  .chip-custom-row input { flex:1; padding:7px 10px; border:1.5px solid #dbe2ea; border-radius:8px; font-family:inherit; font-size:0.78rem; }
+  .chip-custom-row button { border:none; border-radius:8px; padding:0 12px; background:#0c1a30; color:#fff; font-size:0.78rem; font-weight:700; cursor:pointer; font-family:inherit; }
+  .esc-btn { background:#fee2e2; color:#dc2626; }
+  .pill-escalated { background:#fee2e2; color:#dc2626; }
+  .pill-avgtime { background:#eef2f8; color:#0c1a30; }
+
+  .warn-card { background:#fff5f5; border:1px solid #fecaca; border-radius:12px; padding:12px 14px; margin-bottom:10px; }
+  .warn-top { display:flex; justify-content:space-between; align-items:flex-start; gap:8px; }
+  .warn-order { font-weight:800; color:#b91c1c; font-size:0.85rem; }
+  .warn-note { font-size:0.83rem; color:#7f1d1d; margin-top:5px; line-height:1.5; }
+  .warn-meta { font-size:0.7rem; color:#94a3b8; margin-top:6px; }
+
+  .del-x { background:none; border:none; color:#cbd5e1; font-size:1.1rem; cursor:pointer; padding:2px 6px; flex-shrink:0; }
+  .del-x:hover { color:#dc2626; }
+
+  /* ── employee self portal ── */
+  .self-head-card { background:linear-gradient(135deg,#0c1a30,#16283d); color:#fff; border-radius:14px; padding:16px 18px; margin-bottom:16px; }
+  .self-head-card .name { font-weight:800; font-size:1.05rem; }
+  .self-head-card .sub { font-size:0.8rem; opacity:.85; margin-top:4px; }
+
+  .leader-select-bar { display:flex; align-items:center; gap:8px; margin-bottom:14px; flex-wrap:wrap; }
+
+  /* ── transfer / handoff badges ── */
+  .transfer-note { background:#eef2ff; border:1px solid #c7d2fe; border-radius:9px; padding:8px 10px; margin-top:6px; font-size:0.76rem; color:#3730a3; }
+  .btn-purple { background:#ede9fe; color:#6d28d9; }
+
+  /* ── checkbox pick rows (end shift) ── */
+  .chk-row { display:flex; align-items:center; gap:10px; padding:10px 12px; border-bottom:1px solid #f0f3f8; font-size:0.85rem; }
+  .chk-row:last-child { border-bottom:none; }
+  .chk-row input[type=checkbox] { width:17px; height:17px; flex-shrink:0; }
+  .chk-row-mid { flex:1; min-width:0; }
+  .chk-row-num { font-weight:800; color:#0c1a30; }
+  .chk-row-note { font-size:0.72rem; color:#94a3b8; margin-top:2px; }
+
+  /* ── daily report table (matches printed report layout) ── */
+  #reportsScreen { display:none; position:fixed; inset:0; z-index:9300; background:#f3f6fa; flex-direction:column; overflow-y:auto; }
+  .rep-head { background:linear-gradient(135deg,#0c1a30,#16283d); color:#fff; padding:16px; display:flex; align-items:center; gap:12px; flex-wrap:wrap; }
+  .rep-head-title { font-weight:800; font-size:1.05rem; flex:1; }
+  .rep-body { padding:16px; }
+  .rep-day-block { background:#fff; border:1px solid #eef1f5; border-radius:14px; margin-bottom:16px; overflow:hidden; box-shadow:0 4px 18px rgba(15,23,42,0.06); }
+  .rep-day-title { background:#eef2f8; color:#0c1a30; font-weight:800; font-size:0.88rem; padding:10px 14px; }
+  table.rep-table { width:100%; border-collapse:collapse; font-size:0.8rem; }
+  table.rep-table th { background:#0c1a30; color:#fff; padding:9px 10px; text-align:right; font-weight:700; white-space:nowrap; }
+  table.rep-table td { padding:9px 10px; border-bottom:1px solid #f0f3f8; vertical-align:top; }
+  table.rep-table tr:last-child td { border-bottom:none; }
+  .rep-emp-cell { font-weight:700; color:#0c1a30; white-space:nowrap; }
+  .rep-result-ok { color:#16a34a; font-weight:700; }
+  .rep-result-esc { color:#dc2626; font-weight:700; }
+  .rep-result-pending { color:#92400e; font-weight:700; }
+
+  @media (max-width:640px) {
+    .det-stats-row { justify-content:space-between; }
+    .det-stat { flex:1; min-width:0; }
+    .emp-stats { justify-content:flex-start; }
+  }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <button class="topbar-back" onclick="goBack()">→ رجوع لاختيار النظام</button>
+  <div class="topbar-title" id="topTitle">👥 نظام متابعة الفريق وحل مشاكل العملاء</div>
+  <span class="topbar-user" id="headerUserName" style="display:none"></span>
+</div>
+
+<div id="loadingOverlay"><div class="spin"></div><div style="color:#64748b;font-size:0.9rem">جارِ التحميل...</div></div>
+<div id="noticeBox"></div>
+
+<!-- ═══════════ LEADER / ADMIN VIEW ═══════════ -->
+<div class="wrap" id="leaderWrap">
+  <div class="leader-select-bar" id="adminLeaderBar" style="display:none">
+    <label style="font-size:0.8rem;font-weight:700;color:#475569">عرض فريق:</label>
+    <select id="adminLeaderPicker" class="filter-select" onchange="onAdminPickLeader()"></select>
+  </div>
+
+  <div class="toolbar">
+    <div class="toolbar-left">
+      <input type="text" id="empSearch" class="emp-search" placeholder="🔍 بحث باسم الموظف..." oninput="renderEmployeeList()">
+      <select id="empSort" class="filter-select" onchange="renderEmployeeList()">
+        <option value="name">↕ ترتيب: الاسم</option>
+        <option value="unresolved">🔶 الأكثر طلبات غير محلولة</option>
+        <option value="escalated">🔺 الأكثر تصعيداً</option>
+        <option value="warnings">🚩 الأكثر إنذارات</option>
+      </select>
+    </div>
+    <button class="btn-sm btn-purple" onclick="openReportsScreen()">📋 التقارير اليومية</button>
+  </div>
+  <!-- عضوية الفريق (من يتبع لأي رئيس فريق) تُدار حصراً من لوحة تحكم المشرف — لا إضافة أو إزالة من هنا -->
+  <div class="modal-hint" style="margin-top:6px;font-size:0.75rem;color:#94a3b8">أعضاء الفريق يتم تعيينهم من لوحة تحكم المشرف فقط.</div>
+
+  <div class="list-card" id="empList"></div>
+</div>
+
+<!-- ═══════════ EMPLOYEE SELF PORTAL ═══════════ -->
+<div class="wrap" id="employeeWrap">
+  <div class="self-head-card">
+    <div class="name" id="selfName"></div>
+    <div class="sub" id="selfSub"></div>
+  </div>
+
+  <div class="toolbar">
+    <div class="toolbar-left">
+      <span style="font-size:0.85rem;font-weight:700;color:#475569" id="selfStatsLine"></span>
+    </div>
+    <button class="btn-sm btn-purple" onclick="submitDailyReport()">📋 إرسال تقرير اليوم</button>
+    <button class="btn-sm btn-amber" onclick="openEndShiftModal()">🔁 إنهاء الدوام</button>
+    <button class="btn-sm btn-blue" onclick="openAddOrderModal()">+ تسجيل طلب جديد</button>
+  </div>
+
+  <div id="selfWarningsWrap"></div>
+
+  <div class="list-card" id="selfOrderList"></div>
+</div>
+
+<!-- Warning modal -->
+<div class="modal-bg" id="warnModal">
+  <div class="modal-box">
+    <h3>⚠️ إعطاء إنذار</h3>
+    <label>رقم الوصل / الطلب</label>
+    <input type="text" id="warnOrder" placeholder="مثال: 4521">
+    <label>سبب الإنذار</label>
+    <textarea id="warnNote" placeholder="اشرح الخطأ الذي حصل بهذا الطلب..."></textarea>
+    <div class="modal-btns">
+      <button class="btn-sm btn-gray" onclick="closeWarnModal()">إلغاء</button>
+      <button class="btn-sm btn-red" onclick="submitWarning()">إرسال الإنذار</button>
+    </div>
+  </div>
+</div>
+
+<!-- Add order modal (employee self-log) -->
+<div class="modal-bg" id="addOrderModal">
+  <div class="modal-box">
+    <h3>📦 تسجيل طلب</h3>
+    <label>رقم الوصل / الطلب</label>
+    <input type="text" id="ordNumber" placeholder="مثال: 4521">
+    <label>نوع المشكلة</label>
+    <select id="ordCategory">
+      <option value="shipping">🚚 شحن</option>
+      <option value="payment">💳 دفع</option>
+      <option value="damaged">📦 منتج تالف</option>
+      <option value="delay">⏱ تأخير</option>
+      <option value="inquiry">❓ استفسار</option>
+      <option value="other" selected>📋 أخرى</option>
+    </select>
+    <label>ملاحظة / المشكلة (اختياري)</label>
+    <div class="chip-wrap" id="ordNoteChips"></div>
+    <textarea id="ordNote" placeholder="تفاصيل ما تم تنفيذه..."></textarea>
+    <div class="chip-custom-row">
+      <input type="text" id="ordCustomChip" placeholder="أضف عبارة جديدة للقائمة السريعة...">
+      <button onclick="addCustomChip('problem')">+ إضافة</button>
+    </div>
+    <label>الحالة</label>
+    <select id="ordStatus">
+      <option value="resolved">✅ تم الحل</option>
+      <option value="unresolved" selected>🔶 لم يُحل بعد</option>
+    </select>
+    <div class="modal-btns">
+      <button class="btn-sm btn-gray" onclick="closeAddOrderModal()">إلغاء</button>
+      <button class="btn-sm btn-blue" onclick="submitOrder()">حفظ</button>
+    </div>
+  </div>
+</div>
+
+<!-- Resolve order modal (employee — pick/write the solution) -->
+<div class="modal-bg" id="resolveModal">
+  <div class="modal-box">
+    <h3>✅ تسجيل الحل</h3>
+    <div class="modal-hint">اختر الحل من القائمة السريعة أو اكتبه، ليظهر في التقرير اليومي.</div>
+    <label>الحل</label>
+    <div class="chip-wrap" id="resolveChips"></div>
+    <textarea id="resolveNote" placeholder="مثال: تم التبليغ بالتذكرة وانتظار المعالجة..."></textarea>
+    <div class="chip-custom-row">
+      <input type="text" id="resolveCustomChip" placeholder="أضف حلاً جديداً للقائمة السريعة...">
+      <button onclick="addCustomChip('solution')">+ إضافة</button>
+    </div>
+    <div class="modal-btns">
+      <button class="btn-sm btn-gray" onclick="closeResolveModal()">إلغاء</button>
+      <button class="btn-sm btn-blue" onclick="submitResolve()">حفظ الحل</button>
+    </div>
+  </div>
+</div>
+
+<!-- Escalate order modal (employee → leader) -->
+<div class="modal-bg" id="escalateModal">
+  <div class="modal-box">
+    <h3>🔺 تصعيد المشكلة لرئيس الفريق</h3>
+    <div class="modal-hint">استخدم هذا عندما لا تستطيع حل المشكلة بنفسك — سيتم تنبيه رئيس الفريق فوراً.</div>
+    <label>ما الذي جربته ولماذا تحتاج مساعدة؟</label>
+    <textarea id="escalateNote" placeholder="اشرح المشكلة وما تحتاجه من رئيس الفريق..."></textarea>
+    <div class="modal-btns">
+      <button class="btn-sm btn-gray" onclick="closeEscalateModal()">إلغاء</button>
+      <button class="btn-sm btn-red" onclick="submitEscalation()">تصعيد الآن</button>
+    </div>
+  </div>
+</div>
+
+<!-- Transfer single order modal (employee → teammate) -->
+<div class="modal-bg" id="transferModal">
+  <div class="modal-box">
+    <h3>🔁 تحويل الطلب لزميل</h3>
+    <div class="modal-hint">سيصبح الزميل المُختار مسؤولاً عن هذا الطلب ويكمل العمل عليه.</div>
+    <label>اختر الزميل المستلم</label>
+    <select id="transferRecipient"></select>
+    <div class="modal-btns">
+      <button class="btn-sm btn-gray" onclick="closeTransferModal()">إلغاء</button>
+      <button class="btn-sm btn-blue" onclick="submitTransfer()">تحويل</button>
+    </div>
+  </div>
+</div>
+
+<!-- End shift — bulk transfer modal (employee → teammate) -->
+<div class="modal-bg" id="endShiftModal">
+  <div class="modal-box" style="width:460px">
+    <h3>🔁 إنهاء الدوام — تحويل الطلبات المتبقية</h3>
+    <div class="modal-hint">اختر الطلبات غير المحلولة التي تريد تحويلها، ثم اختر الزميل الذي سيستلمها.</div>
+    <label>الطلبات غير المحلولة</label>
+    <div class="pick-list" id="endShiftOrderList"></div>
+    <label>تحويل إلى</label>
+    <select id="endShiftRecipient"></select>
+    <div class="modal-btns">
+      <button class="btn-sm btn-gray" onclick="closeEndShiftModal()">إلغاء</button>
+      <button class="btn-sm btn-amber" onclick="submitEndShiftTransfer()">تحويل المحدد</button>
+    </div>
+  </div>
+</div>
+
+<!-- Daily reports screen (leader/admin) -->
+<div id="reportsScreen">
+  <div class="rep-head">
+    <button class="det-head-back" onclick="closeReportsScreen()">→ رجوع</button>
+    <div class="rep-head-title">📋 التقارير اليومية</div>
+  </div>
+  <div class="rep-body" id="reportsBody"></div>
+</div>
+
+<!-- Employee detail screen (leader/admin) -->
+<div id="empScreen">
+  <div class="det-head">
+    <div class="det-head-top">
+      <button class="det-head-back" onclick="closeEmpScreen()">→ رجوع</button>
+      <div class="det-head-name" id="detName"></div>
+
+    </div>
+    <div class="det-head-sub" id="detSub"></div>
+    <div class="det-stats-row">
+      <div class="det-stat"><b id="detTotal">0</b><span>إجمالي الطلبات</span></div>
+      <div class="det-stat"><b id="detResolved">0</b><span>تم حلها</span></div>
+      <div class="det-stat"><b id="detUnresolved">0</b><span>لم تُحل</span></div>
+      <div class="det-stat"><b id="detEscalated">0</b><span>مصعّدة</span></div>
+      <div class="det-stat"><b id="detAvgTime">—</b><span>متوسط وقت الحل</span></div>
+      <div class="det-stat"><b id="detWarnings">0</b><span>الإنذارات</span></div>
+    </div>
+  </div>
+  <div class="det-actions">
+    <button class="btn-sm btn-red" onclick="openWarnModal()">⚠️ إعطاء إنذار</button>
+  </div>
+  <div class="det-tabs">
+    <div class="det-tab active" id="tabOrders" onclick="switchDetTab('orders')">📦 الطلبات</div>
+    <div class="det-tab" id="tabEscalated" onclick="switchDetTab('escalated')">🔺 المصعّدة</div>
+    <div class="det-tab" id="tabWarnings" onclick="switchDetTab('warnings')">⚠️ الإنذارات</div>
+  </div>
+  <div class="det-body">
+    <div id="detOrdersPane"></div>
+    <div id="detEscalatedPane" style="display:none"></div>
+    <div id="detWarningsPane" style="display:none"></div>
+  </div>
+</div>
+
+<script>
+// ═══════════════════════════════════════════════════════════════
+// FIREBASE — same project as the rest of Mutabaa
+// ═══════════════════════════════════════════════════════════════
+const firebaseConfig = {
+  apiKey: "AIzaSyA1q9LiS6EXNCBFmFvytyN-p4KKgP9wym4",
+  authDomain: "prime-e-8eb80.firebaseapp.com",
+  databaseURL: "https://prime-e-8eb80-default-rtdb.firebaseio.com",
+  projectId: "prime-e-8eb80",
+  storageBucket: "prime-e-8eb80.firebasestorage.app",
+  messagingSenderId: "671376930301",
+  appId: "1:671376930301:web:f8b61666314f3149fb5594"
+};
+firebase.initializeApp(firebaseConfig);
+const fbDB = firebase.database();
+const fbAuth = firebase.auth();
+
+// ═══════════════════════════════════════════════════════════════
+// AUTH — same pattern as ticket-system / departments-attendance
+// ═══════════════════════════════════════════════════════════════
+let myWorkspaceOwner = null;
+let isAdmin = false;
+let myUid = null;
+let myDisplayName = '';
+let myTeamRole = 'none';   // 'leader' | 'employee' | 'none'
+let myLeaderUid = null;    // for employees
+
+function escapeHtml(s) {
+  return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
+}
+function formatDateTime(ts) {
+  if (!ts) return '';
+  const d = new Date(ts);
+  return d.toLocaleDateString('ar-IQ', { day:'2-digit', month:'2-digit' }) + ' · ' + d.toLocaleTimeString('ar-IQ', { hour:'2-digit', minute:'2-digit' });
+}
+function initials(name) {
+  const s = (name || '؟').trim();
+  return s.slice(0, 1).toUpperCase();
+}
+const CATEGORY_LABELS = {
+  shipping: '🚚 شحن', payment: '💳 دفع', damaged: '📦 منتج تالف',
+  delay: '⏱ تأخير', inquiry: '❓ استفسار', other: '📋 أخرى'
+};
+function categoryBadge(cat) {
+  if (!cat) return '';
+  return `<span class="cat-badge">${CATEGORY_LABELS[cat] || CATEGORY_LABELS.other}</span>`;
+}
+function formatDuration(ms) {
+  if (!ms || ms < 0) return '';
+  const mins = Math.round(ms / 60000);
+  if (mins < 60) return mins + ' د';
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return hrs + ' سا ' + (mins % 60) + ' د';
+  const days = Math.floor(hrs / 24);
+  return days + ' يوم ' + (hrs % 24) + ' سا';
+}
+function showNotice(msg) {
+  document.getElementById('loadingOverlay').style.display = 'none';
+  const n = document.getElementById('noticeBox');
+  n.textContent = msg;
+  n.style.display = 'block';
+}
+
+fbAuth.onAuthStateChanged(function (user) {
+  if (!user) { showNotice('الرجاء تسجيل الدخول من الملف الرئيسي أولاً'); return; }
+  myUid = user.uid;
+  fbDB.ref('admins/' + user.uid).once('value').then(adminSnap => {
+    if (adminSnap.val() === true) {
+      isAdmin = true;
+      myWorkspaceOwner = user.uid;
+      myDisplayName = (fbAuth.currentUser && fbAuth.currentUser.displayName) || 'المشرف';
+      boot();
+      return;
+    }
+    fbDB.ref('memberIndex/' + user.uid).once('value').then(idxSnap => {
+      const owner = idxSnap.val();
+      if (!owner) { showNotice('حساب غير مرتبط بمساحة عمل'); return; }
+      myWorkspaceOwner = owner;
+      fbDB.ref('staffMembers/' + owner + '/' + user.uid).once('value').then(pSnap => {
+        const p = pSnap.val() || {};
+        myDisplayName = p.name || p.phone || '';
+        myTeamRole = p.teamRole || 'none';
+        myLeaderUid = p.teamLeaderUid || null;
+        boot();
+      });
+    });
+  }).catch(() => showNotice('تعذّر الاتصال بقاعدة البيانات'));
+});
+
+function goBack() {
+  if (window.parent && window.parent !== window && typeof window.parent.backToChooserFromTeamSystem === 'function') {
+    window.parent.backToChooserFromTeamSystem();
+  } else if (window.parent && window.parent !== window && typeof window.parent.backToChooserFromDepartments === 'function') {
+    window.parent.backToChooserFromDepartments();
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// STATE
+// ═══════════════════════════════════════════════════════════════
+let staffAll = {};          // uid -> staff member record (whole workspace)
+let allLeaders = [];        // uids with teamRole === 'leader'
+let currentLeaderUid = null; // whose team is being viewed (self, or admin's pick)
+let activeEmpUid = null;     // uid open in detail screen
+let empOrdersRef = null, empWarningsRef = null;
+let empOrdersCache = {}, empWarningsCache = {};
+let detTab = 'orders';
+
+// employee self-portal listeners
+let selfOrdersRef = null, selfWarningsRef = null;
+let selfOrdersCache = {};
+
+function staffRootRef() { return fbDB.ref('staffMembers/' + myWorkspaceOwner); }
+
+function boot() {
+  document.getElementById('loadingOverlay').style.display = 'none';
+  const badge = document.getElementById('headerUserName');
+  badge.textContent = myDisplayName;
+  badge.style.display = 'inline-block';
+
+  staffRootRef().on('value', snap => {
+    staffAll = snap.val() || {};
+    allLeaders = Object.keys(staffAll).filter(uid => staffAll[uid] && staffAll[uid].teamRole === 'leader');
+
+    if (isAdmin) {
+      routeAdmin();
+    } else if (myTeamRole === 'leader') {
+      routeLeader(myUid);
+    } else if (myTeamRole === 'employee') {
+      routeEmployee();
+    } else {
+      showNotice('🚫 لم يتم تحديد دورك في نظام الفرق بعد. تواصل مع المشرف لتفعيل الصلاحية.');
+    }
+  });
+}
+
+// ═══════════════════════════════════════════════════════════════
+// ROUTING
+// ═══════════════════════════════════════════════════════════════
+function routeAdmin() {
+  document.getElementById('leaderWrap').style.display = 'block';
+  document.getElementById('employeeWrap').style.display = 'none';
+  document.getElementById('adminLeaderBar').style.display = 'flex';
+
+  const picker = document.getElementById('adminLeaderPicker');
+  const prevVal = picker.value;
+  picker.innerHTML = allLeaders.map(uid =>
+    `<option value="${uid}">${escapeHtml(staffAll[uid].name || staffAll[uid].phone || uid)}</option>`
+  ).join('') || '<option value="">لا يوجد رؤساء فرق بعد</option>';
+
+  if (!allLeaders.length) {
+    document.getElementById('empList').innerHTML = '<div class="empty-state">لا يوجد رؤساء فرق مُعيَّنين بعد. عيّن الدور من لوحة تحكم المشرف.</div>';
+    return;
+  }
+  currentLeaderUid = allLeaders.includes(prevVal) ? prevVal : allLeaders[0];
+  picker.value = currentLeaderUid;
+  document.getElementById('topTitle').textContent = '👥 متابعة الفريق — عرض المشرف';
+  renderEmployeeList();
+}
+function onAdminPickLeader() {
+  currentLeaderUid = document.getElementById('adminLeaderPicker').value;
+  renderEmployeeList();
+}
+
+function routeLeader(leaderUid) {
+  document.getElementById('leaderWrap').style.display = 'block';
+  document.getElementById('employeeWrap').style.display = 'none';
+  document.getElementById('topTitle').textContent = '👥 فريقي';
+  currentLeaderUid = leaderUid;
+  renderEmployeeList();
+}
+
+function routeEmployee() {
+  document.getElementById('leaderWrap').style.display = 'none';
+  document.getElementById('employeeWrap').style.display = 'block';
+  document.getElementById('topTitle').textContent = '📦 بوابة الموظف';
+
+  document.getElementById('selfName').textContent = myDisplayName;
+  const leader = myLeaderUid && staffAll[myLeaderUid];
+  document.getElementById('selfSub').textContent = leader
+    ? ('رئيس الفريق: ' + (leader.name || leader.phone || '—'))
+    : 'لم يتم تعيين رئيس فريق بعد';
+
+  if (selfOrdersRef) selfOrdersRef.off();
+  if (selfWarningsRef) selfWarningsRef.off();
+  selfOrdersRef = fbDB.ref('teamOrders/' + myWorkspaceOwner + '/' + myUid);
+  selfWarningsRef = fbDB.ref('teamWarnings/' + myWorkspaceOwner + '/' + myUid);
+
+  selfOrdersRef.on('value', snap => { selfOrdersCache = snap.val() || {}; renderSelfOrders(selfOrdersCache); updateSelfStatsLine(selfOrdersCache); });
+  selfWarningsRef.on('value', snap => { const selfWarnings = snap.val() || {}; renderSelfWarnings(selfWarnings); });
+}
+
+// ═══════════════════════════════════════════════════════════════
+// LEADER / ADMIN — employee list
+// ═══════════════════════════════════════════════════════════════
+function myTeamEmployeeUids() {
+  return Object.keys(staffAll).filter(uid => staffAll[uid] && staffAll[uid].teamLeaderUid === currentLeaderUid);
+}
+
+function renderEmployeeList() {
+  const box = document.getElementById('empList');
+  if (!currentLeaderUid) { box.innerHTML = ''; return; }
+  const q = (document.getElementById('empSearch').value || '').trim().toLowerCase();
+  const sortMode = document.getElementById('empSort').value;
+
+  let uids = myTeamEmployeeUids();
+  if (q) uids = uids.filter(uid => (staffAll[uid].name || '').toLowerCase().includes(q) || (staffAll[uid].phone || '').includes(q));
+
+  uids.sort((a, b) => {
+    const sa = staffAll[a].orderStats || {}, sb = staffAll[b].orderStats || {};
+    if (sortMode === 'unresolved') return (sb.unresolved || 0) - (sa.unresolved || 0);
+    if (sortMode === 'escalated') return (sb.escalated || 0) - (sa.escalated || 0);
+    if (sortMode === 'warnings') return (staffAll[b].warningCount || 0) - (staffAll[a].warningCount || 0);
+    return (staffAll[a].name || '').localeCompare(staffAll[b].name || '', 'ar');
+  });
+
+  if (!uids.length) {
+    box.innerHTML = `<div class="empty-state">${q ? 'لا نتائج مطابقة' : 'لا يوجد موظفون في هذا الفريق بعد — اضغط "+ إضافة موظف"'}</div>`;
+    return;
+  }
+
+  box.innerHTML = uids.map(uid => {
+    const p = staffAll[uid];
+    const st = p.orderStats || { total: 0, resolved: 0, unresolved: 0, escalated: 0 };
+    const warnCount = p.warningCount || 0;
+    const avgMs = st.resolved ? (st.totalResponseMs || 0) / st.resolved : 0;
+    return `<div class="emp-row" onclick="openEmpScreen('${uid}')">
+      <div class="emp-avatar">${initials(p.name)}</div>
+      <div class="emp-mid">
+        <div class="emp-name">${escapeHtml(p.name || p.phone || 'بدون اسم')}</div>
+        <div class="emp-sub">${escapeHtml(p.phone || p.department || '')}</div>
+      </div>
+      <div class="emp-stats">
+        <span class="pill pill-total">${st.total || 0} طلب</span>
+        <span class="pill pill-unresolved">${st.unresolved || 0} غير محلول</span>
+        ${st.escalated ? `<span class="pill pill-escalated">🔺 ${st.escalated}</span>` : ''}
+        ${avgMs ? `<span class="pill pill-avgtime">⏱ ${formatDuration(avgMs)}</span>` : ''}
+        ${warnCount ? `<span class="pill pill-warn">🚩 ${warnCount}</span>` : ''}
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// ═══════════════════════════════════════════════════════════════
+// عضوية الفريق (تعيين موظف لرئيس فريق) تُدار حصراً من لوحة تحكم المشرف
+// عبر setMemberTeamLeader — لا توجد هنا أي وسيلة لإضافة أو إزالة عضو،
+// بنفس نمط نظام التذاكر حيث كل صلاحية مصدرها لوحة المشرف فقط.
+// ═══════════════════════════════════════════════════════════════
+// EMPLOYEE DETAIL SCREEN (leader/admin)
+// ═══════════════════════════════════════════════════════════════
+function openEmpScreen(uid) {
+  activeEmpUid = uid;
+  const p = staffAll[uid] || {};
+  document.getElementById('detName').textContent = p.name || p.phone || 'موظف';
+  document.getElementById('detSub').textContent = p.phone || p.department || '';
+
+  document.getElementById('empScreen').style.display = 'flex';
+  switchDetTab('orders');
+
+  if (empOrdersRef) empOrdersRef.off();
+  if (empWarningsRef) empWarningsRef.off();
+  empOrdersRef = fbDB.ref('teamOrders/' + myWorkspaceOwner + '/' + uid);
+  empWarningsRef = fbDB.ref('teamWarnings/' + myWorkspaceOwner + '/' + uid);
+
+  empOrdersRef.on('value', snap => { empOrdersCache = snap.val() || {}; renderDetOrders(); renderDetEscalated(); updateDetStats(); });
+  empWarningsRef.on('value', snap => { empWarningsCache = snap.val() || {}; renderDetWarnings(); updateDetStats(); });
+}
+
+function closeEmpScreen() {
+  document.getElementById('empScreen').style.display = 'none';
+  if (empOrdersRef) { empOrdersRef.off(); empOrdersRef = null; }
+  if (empWarningsRef) { empWarningsRef.off(); empWarningsRef = null; }
+  activeEmpUid = null;
+}
+
+function switchDetTab(tab) {
+  detTab = tab;
+  document.getElementById('tabOrders').classList.toggle('active', tab === 'orders');
+  document.getElementById('tabEscalated').classList.toggle('active', tab === 'escalated');
+  document.getElementById('tabWarnings').classList.toggle('active', tab === 'warnings');
+  document.getElementById('detOrdersPane').style.display = tab === 'orders' ? 'block' : 'none';
+  document.getElementById('detEscalatedPane').style.display = tab === 'escalated' ? 'block' : 'none';
+  document.getElementById('detWarningsPane').style.display = tab === 'warnings' ? 'block' : 'none';
+}
+
+function updateDetStats() {
+  const orders = Object.values(empOrdersCache);
+  const total = orders.length;
+  const resolved = orders.filter(o => o.status === 'resolved').length;
+  const escalated = orders.filter(o => o.status === 'escalated').length;
+  const withTime = orders.filter(o => o.status === 'resolved' && o.responseMs);
+  const avgMs = withTime.length ? withTime.reduce((s, o) => s + o.responseMs, 0) / withTime.length : 0;
+  document.getElementById('detTotal').textContent = total;
+  document.getElementById('detResolved').textContent = resolved;
+  document.getElementById('detUnresolved').textContent = total - resolved - escalated;
+  document.getElementById('detEscalated').textContent = escalated;
+  document.getElementById('detAvgTime').textContent = avgMs ? formatDuration(avgMs) : '—';
+  document.getElementById('detWarnings').textContent = Object.keys(empWarningsCache).length;
+}
+
+function statusLabel(status) {
+  if (status === 'resolved') return '✅ محلول';
+  if (status === 'escalated') return '🔺 مصعّد';
+  return '🔶 غير محلول';
+}
+
+function renderDetOrders() {
+  const arr = Object.keys(empOrdersCache).map(id => Object.assign({ id }, empOrdersCache[id]))
+    .sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+  document.getElementById('detOrdersPane').innerHTML = arr.map(o => `
+    <div class="order-card">
+      <div class="order-mid">
+        <div class="order-num">📦 ${escapeHtml(o.orderNumber || '—')}</div>
+        ${categoryBadge(o.category)}
+        ${o.note ? `<div class="order-note">${escapeHtml(o.note)}</div>` : ''}
+        <div class="order-time">${formatDateTime(o.createdAt)}</div>
+        ${o.status === 'resolved' && o.responseMs ? `<div class="resp-time">⏱ وقت الحل: ${formatDuration(o.responseMs)}</div>` : ''}
+        ${o.status === 'resolved' && o.resolutionNote ? `<div class="solve-note-box">✅ الحل: ${escapeHtml(o.resolutionNote)}</div>` : ''}
+        ${o.status === 'escalated' && o.escalatedNote ? `<div class="esc-note-box">🔺 ${escapeHtml(o.escalatedNote)}</div>` : ''}
+      </div>
+      <span class="status-badge ${o.status}">${statusLabel(o.status)}</span>
+    </div>`).join('') || '<div class="empty-state">لا يوجد طلبات مسجَّلة بعد</div>';
+}
+
+function renderDetEscalated() {
+  const arr = Object.keys(empOrdersCache).map(id => Object.assign({ id }, empOrdersCache[id]))
+    .filter(o => o.status === 'escalated')
+    .sort((a, b) => (b.escalatedAt || b.createdAt || 0) - (a.escalatedAt || a.createdAt || 0));
+  document.getElementById('detEscalatedPane').innerHTML = arr.map(o => `
+    <div class="order-card">
+      <div class="order-mid">
+        <div class="order-num">🔺 ${escapeHtml(o.orderNumber || '—')}</div>
+        ${categoryBadge(o.category)}
+        ${o.note ? `<div class="order-note">${escapeHtml(o.note)}</div>` : ''}
+        <div class="esc-note-box">${escapeHtml(o.escalatedNote || '')}</div>
+        <div class="order-time">صُعِّد: ${formatDateTime(o.escalatedAt)}</div>
+      </div>
+      <button class="btn-sm btn-green" onclick="leaderResolveEscalation('${o.id}')">✅ تم الحل</button>
+    </div>`).join('') || '<div class="empty-state">لا يوجد مشاكل مصعّدة حالياً 🎉</div>';
+}
+
+function leaderResolveEscalation(orderId) {
+  if (!activeEmpUid) return;
+  const now = Date.now();
+  const order = empOrdersCache[orderId] || {};
+  const responseMs = order.createdAt ? (now - order.createdAt) : null;
+  fbDB.ref('teamOrders/' + myWorkspaceOwner + '/' + activeEmpUid + '/' + orderId).update({
+    status: 'resolved', resolvedAt: firebase.database.ServerValue.TIMESTAMP, responseMs, updatedAt: firebase.database.ServerValue.TIMESTAMP
+  }).then(() => {
+    const statsRef = fbDB.ref('staffMembers/' + myWorkspaceOwner + '/' + activeEmpUid + '/orderStats');
+    statsRef.transaction(cur => {
+      cur = cur || { total: 0, resolved: 0, unresolved: 0, escalated: 0, totalResponseMs: 0 };
+      cur.escalated = Math.max(0, (cur.escalated || 0) - 1);
+      cur.resolved = (cur.resolved || 0) + 1;
+      cur.totalResponseMs = (cur.totalResponseMs || 0) + (responseMs || 0);
+      return cur;
+    });
+  }).catch(err => alert('تعذّر التحديث: ' + err.message));
+}
+
+function renderDetWarnings() {
+  const arr = Object.keys(empWarningsCache).map(id => Object.assign({ id }, empWarningsCache[id]))
+    .sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+  document.getElementById('detWarningsPane').innerHTML = arr.map(w => `
+    <div class="warn-card">
+      <div class="warn-top">
+        <span class="warn-order">⚠️ الطلب #${escapeHtml(w.orderNumber || '—')}</span>
+      </div>
+      <div class="warn-note">${escapeHtml(w.note || '')}</div>
+      <div class="warn-meta">بواسطة ${escapeHtml(w.byName || '')} · ${formatDateTime(w.createdAt)}</div>
+    </div>`).join('') || '<div class="empty-state">لا يوجد إنذارات — سجل نظيف 🎉</div>';
+}
+
+// ═══════════════════════════════════════════════════════════════
+// WARNINGS (leader gives to employee)
+// ═══════════════════════════════════════════════════════════════
+function openWarnModal() {
+  document.getElementById('warnOrder').value = '';
+  document.getElementById('warnNote').value = '';
+  document.getElementById('warnModal').style.display = 'flex';
+}
+function closeWarnModal() { document.getElementById('warnModal').style.display = 'none'; }
+
+function submitWarning() {
+  const orderNumber = document.getElementById('warnOrder').value.trim();
+  const note = document.getElementById('warnNote').value.trim();
+  if (!note) { alert('الرجاء كتابة سبب الإنذار'); return; }
+  if (!activeEmpUid) return;
+
+  const warnRef = fbDB.ref('teamWarnings/' + myWorkspaceOwner + '/' + activeEmpUid).push();
+  warnRef.set({
+    orderNumber, note,
+    byUid: myUid, byName: myDisplayName,
+    createdAt: firebase.database.ServerValue.TIMESTAMP
+  }).then(() => {
+    fbDB.ref('staffMembers/' + myWorkspaceOwner + '/' + activeEmpUid + '/warningCount').transaction(c => (c || 0) + 1);
+    closeWarnModal();
+  }).catch(err => alert('تعذّر إرسال الإنذار: ' + err.message));
+}
+
+// ═══════════════════════════════════════════════════════════════
+// EMPLOYEE SELF PORTAL — log processed orders
+// ═══════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════════
+// QUICK-PICK CHIPS — fast reason/solution selection for reports
+// ═══════════════════════════════════════════════════════════════
+const DEFAULT_PROBLEM_CHIPS = [
+  'العميل يشتكي من اشعارات وهمية',
+  'الطلب راجع بسبب الرقم غير داخل بالخدمة',
+  'الزبون يبلغ يريد استلامه',
+  'المندوب غير ملتزم بالملاحظة',
+  'شحنات جديدة بين فرعين',
+  'واصل نقص للزبون',
+  'الزبون يبلغ بان المندوب يتأخر بالتوصيل'
+];
+const DEFAULT_SOLUTION_CHIPS = [
+  'تم التبليغ بالتذكرة وانتظار المعالجة',
+  'تم الاتصال بالزبون والتحقق من الاستلام',
+  'تم إرسال الطلب للفرع الصحيح',
+  'تم تعديل رقم الزبون وتبليغ المتابعة',
+  'شحنات سلمت بنجاح',
+  'تم حل المشكلة مباشرة مع العميل',
+  'تم رفع وصل تعويضي للعميل',
+  'إعادة إرسال الطلب للزبون',
+  'تم تبليغ قسم الحسابات بالأمر'
+];
+function getChipList(kind) {
+  const key = 'mutabaa_chips_' + kind;
+  try {
+    const saved = JSON.parse(localStorage.getItem(key) || 'null');
+    if (Array.isArray(saved) && saved.length) return saved;
+  } catch (e) {}
+  return kind === 'problem' ? DEFAULT_PROBLEM_CHIPS.slice() : DEFAULT_SOLUTION_CHIPS.slice();
+}
+function saveChipList(kind, list) {
+  try { localStorage.setItem('mutabaa_chips_' + kind, JSON.stringify(list)); } catch (e) {}
+}
+function renderChips(containerId, kind, targetTextareaId) {
+  const list = getChipList(kind);
+  const box = document.getElementById(containerId);
+  box.innerHTML = list.map(text =>
+    `<button type="button" class="chip" onclick="pickChip('${targetTextareaId}', this)">${escapeHtml(text)}</button>`
+  ).join('');
+}
+function pickChip(targetTextareaId, btn) {
+  const ta = document.getElementById(targetTextareaId);
+  const text = btn.textContent;
+  ta.value = ta.value.trim() ? ta.value.trim() + ' — ' + text : text;
+}
+function addCustomChip(kind) {
+  const inputId = kind === 'solution' ? 'resolveCustomChip' : 'ordCustomChip';
+  const input = document.getElementById(inputId);
+  const val = input.value.trim();
+  if (!val) return;
+  const list = getChipList(kind);
+  if (!list.includes(val)) { list.push(val); saveChipList(kind, list); }
+  input.value = '';
+  if (kind === 'solution') renderChips('resolveChips', 'solution', 'resolveNote');
+  else renderChips('ordNoteChips', 'problem', 'ordNote');
+}
+
+function openAddOrderModal() {
+  document.getElementById('ordNumber').value = '';
+  document.getElementById('ordNote').value = '';
+  document.getElementById('ordStatus').value = 'unresolved';
+  renderChips('ordNoteChips', 'problem', 'ordNote');
+  document.getElementById('addOrderModal').style.display = 'flex';
+}
+function closeAddOrderModal() { document.getElementById('addOrderModal').style.display = 'none'; }
+
+function submitOrder() {
+  const orderNumber = document.getElementById('ordNumber').value.trim();
+  const category = document.getElementById('ordCategory').value;
+  const note = document.getElementById('ordNote').value.trim();
+  const status = document.getElementById('ordStatus').value;
+  if (!orderNumber) { alert('الرجاء إدخال رقم الوصل'); return; }
+
+  const ref = fbDB.ref('teamOrders/' + myWorkspaceOwner + '/' + myUid).push();
+  const isResolvedNow = status === 'resolved';
+  ref.set({
+    orderNumber, category, note, status,
+    resolutionNote: isResolvedNow ? note : null,
+    createdAt: firebase.database.ServerValue.TIMESTAMP,
+    updatedAt: firebase.database.ServerValue.TIMESTAMP,
+    resolvedAt: isResolvedNow ? firebase.database.ServerValue.TIMESTAMP : null,
+    responseMs: isResolvedNow ? 0 : null
+  }).then(() => {
+    const statsRef = fbDB.ref('staffMembers/' + myWorkspaceOwner + '/' + myUid + '/orderStats');
+    statsRef.transaction(cur => {
+      cur = cur || { total: 0, resolved: 0, unresolved: 0, escalated: 0, totalResponseMs: 0 };
+      cur.total = (cur.total || 0) + 1;
+      if (status === 'resolved') cur.resolved = (cur.resolved || 0) + 1;
+      else cur.unresolved = (cur.unresolved || 0) + 1;
+      return cur;
+    });
+    closeAddOrderModal();
+  }).catch(err => alert('تعذّر الحفظ: ' + err.message));
+}
+
+let resolvingOrderId = null;
+function toggleOrderStatus(orderId, currentStatus) {
+  if (currentStatus === 'escalated') { alert('هذا الطلب مصعّد حالياً — بانتظار رئيس الفريق'); return; }
+  if (currentStatus === 'resolved') {
+    // switch back to unresolved — instant, no note needed
+    fbDB.ref('teamOrders/' + myWorkspaceOwner + '/' + myUid + '/' + orderId).update({
+      status: 'unresolved', updatedAt: firebase.database.ServerValue.TIMESTAMP,
+      resolvedAt: null, responseMs: null, resolutionNote: null
+    }).then(() => {
+      const statsRef = fbDB.ref('staffMembers/' + myWorkspaceOwner + '/' + myUid + '/orderStats');
+      statsRef.transaction(cur => {
+        cur = cur || { total: 0, resolved: 0, unresolved: 0, escalated: 0, totalResponseMs: 0 };
+        cur.unresolved = (cur.unresolved || 0) + 1;
+        cur.resolved = Math.max(0, (cur.resolved || 0) - 1);
+        return cur;
+      });
+    }).catch(err => alert('تعذّر التحديث: ' + err.message));
+    return;
+  }
+  // moving to resolved — ask for the solution via quick-pick modal
+  openResolveModal(orderId);
+}
+function openResolveModal(orderId) {
+  resolvingOrderId = orderId;
+  document.getElementById('resolveNote').value = '';
+  renderChips('resolveChips', 'solution', 'resolveNote');
+  document.getElementById('resolveModal').style.display = 'flex';
+}
+function closeResolveModal() { document.getElementById('resolveModal').style.display = 'none'; resolvingOrderId = null; }
+function submitResolve() {
+  if (!resolvingOrderId) return;
+  const resolutionNote = document.getElementById('resolveNote').value.trim();
+  const orderId = resolvingOrderId;
+  const order = (selfOrdersCache && selfOrdersCache[orderId]) || {};
+  const now = Date.now();
+  const responseMs = order.createdAt ? (now - order.createdAt) : null;
+  fbDB.ref('teamOrders/' + myWorkspaceOwner + '/' + myUid + '/' + orderId).update({
+    status: 'resolved',
+    resolutionNote: resolutionNote || null,
+    updatedAt: firebase.database.ServerValue.TIMESTAMP,
+    resolvedAt: firebase.database.ServerValue.TIMESTAMP,
+    responseMs: responseMs
+  }).then(() => {
+    const statsRef = fbDB.ref('staffMembers/' + myWorkspaceOwner + '/' + myUid + '/orderStats');
+    statsRef.transaction(cur => {
+      cur = cur || { total: 0, resolved: 0, unresolved: 0, escalated: 0, totalResponseMs: 0 };
+      cur.resolved = (cur.resolved || 0) + 1;
+      cur.unresolved = Math.max(0, (cur.unresolved || 0) - 1);
+      cur.totalResponseMs = (cur.totalResponseMs || 0) + (responseMs || 0);
+      return cur;
+    });
+    closeResolveModal();
+  }).catch(err => alert('تعذّر التحديث: ' + err.message));
+}
+
+function deleteOwnOrder(orderId, status) {
+  if (!confirm('حذف هذا الطلب من سجلك؟')) return;
+  fbDB.ref('teamOrders/' + myWorkspaceOwner + '/' + myUid + '/' + orderId).remove().then(() => {
+    const statsRef = fbDB.ref('staffMembers/' + myWorkspaceOwner + '/' + myUid + '/orderStats');
+    statsRef.transaction(cur => {
+      cur = cur || { total: 0, resolved: 0, unresolved: 0, escalated: 0 };
+      cur.total = Math.max(0, (cur.total || 0) - 1);
+      if (status === 'resolved') cur.resolved = Math.max(0, (cur.resolved || 0) - 1);
+      else if (status === 'escalated') cur.escalated = Math.max(0, (cur.escalated || 0) - 1);
+      else cur.unresolved = Math.max(0, (cur.unresolved || 0) - 1);
+      return cur;
+    });
+  }).catch(err => alert('تعذّر الحذف: ' + err.message));
+}
+
+// ═══════════════════════════════════════════════════════════════
+// ESCALATION (employee → leader)
+// ═══════════════════════════════════════════════════════════════
+let escalateOrderId = null;
+function openEscalateModal(orderId) {
+  escalateOrderId = orderId;
+  document.getElementById('escalateNote').value = '';
+  document.getElementById('escalateModal').style.display = 'flex';
+}
+function closeEscalateModal() { document.getElementById('escalateModal').style.display = 'none'; escalateOrderId = null; }
+
+function submitEscalation() {
+  const note = document.getElementById('escalateNote').value.trim();
+  if (!note) { alert('الرجاء شرح المشكلة قبل التصعيد'); return; }
+  if (!escalateOrderId) return;
+  const order = (selfOrdersCache && selfOrdersCache[escalateOrderId]) || {};
+  const wasUnresolved = order.status !== 'escalated';
+
+  fbDB.ref('teamOrders/' + myWorkspaceOwner + '/' + myUid + '/' + escalateOrderId).update({
+    status: 'escalated',
+    escalatedNote: note,
+    escalatedAt: firebase.database.ServerValue.TIMESTAMP,
+    escalatedBy: myUid,
+    updatedAt: firebase.database.ServerValue.TIMESTAMP
+  }).then(() => {
+    if (wasUnresolved) {
+      const statsRef = fbDB.ref('staffMembers/' + myWorkspaceOwner + '/' + myUid + '/orderStats');
+      statsRef.transaction(cur => {
+        cur = cur || { total: 0, resolved: 0, unresolved: 0, escalated: 0 };
+        cur.escalated = (cur.escalated || 0) + 1;
+        if (order.status === 'unresolved') cur.unresolved = Math.max(0, (cur.unresolved || 0) - 1);
+        return cur;
+      });
+    }
+    closeEscalateModal();
+  }).catch(err => alert('تعذّر التصعيد: ' + err.message));
+}
+
+function updateSelfStatsLine(orders) {
+  const arr = Object.values(orders);
+  const total = arr.length;
+  const resolved = arr.filter(o => o.status === 'resolved').length;
+  const escalated = arr.filter(o => o.status === 'escalated').length;
+  document.getElementById('selfStatsLine').textContent = `📦 ${total} طلب مسجَّل · ✅ ${resolved} محلول · 🔶 ${total - resolved - escalated} غير محلول${escalated ? ' · 🔺 ' + escalated + ' مصعّد' : ''}`;
+}
+
+function renderSelfOrders(orders) {
+  const arr = Object.keys(orders).map(id => Object.assign({ id }, orders[id]))
+    .sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+  document.getElementById('selfOrderList').innerHTML = arr.map(o => `
+    <div class="order-card">
+      <div class="order-mid">
+        <div class="order-num">📦 ${escapeHtml(o.orderNumber || '—')}</div>
+        ${categoryBadge(o.category)}
+        ${o.note ? `<div class="order-note">${escapeHtml(o.note)}</div>` : ''}
+        <div class="order-time">${formatDateTime(o.createdAt)}</div>
+        ${o.status === 'resolved' && o.responseMs ? `<div class="resp-time">⏱ تم الحل خلال ${formatDuration(o.responseMs)}</div>` : ''}
+        ${o.status === 'resolved' && o.resolutionNote ? `<div class="solve-note-box">✅ الحل: ${escapeHtml(o.resolutionNote)}</div>` : ''}
+        ${o.status === 'escalated' ? `<div class="esc-note-box">🔺 بانتظار رئيس الفريق${o.escalatedNote ? ' — ' + escapeHtml(o.escalatedNote) : ''}</div>` : ''}
+        ${o.transferredFromName ? `<div class="transfer-note">🔁 مُحوَّل إليك من ${escapeHtml(o.transferredFromName)}</div>` : ''}
+      </div>
+      ${o.status !== 'escalated' ? `<button class="status-badge ${o.status}" onclick="toggleOrderStatus('${o.id}','${o.status}')" title="اضغط لتغيير الحالة">${o.status === 'resolved' ? '✅ محلول' : '🔶 غير محلول'}</button>` : `<span class="status-badge escalated">🔺 مصعّد</span>`}
+      ${o.status === 'unresolved' ? `<button class="btn-sm esc-btn" onclick="openEscalateModal('${o.id}')" title="تصعيد لرئيس الفريق">🔺 تصعيد</button>` : ''}
+      ${o.status === 'unresolved' ? `<button class="btn-sm btn-purple" onclick="openTransferModal('${o.id}')" title="تحويل لزميل">🔁 تحويل</button>` : ''}
+      <button class="del-x" onclick="deleteOwnOrder('${o.id}','${o.status}')" title="حذف">✕</button>
+    </div>`).join('') || '<div class="empty-state">لم تسجّل أي طلب بعد — اضغط "+ تسجيل طلب جديد"</div>';
+}
+
+function renderSelfWarnings(warnings) {
+  const arr = Object.keys(warnings).map(id => Object.assign({ id }, warnings[id]))
+    .sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+  const box = document.getElementById('selfWarningsWrap');
+  if (!arr.length) { box.innerHTML = ''; return; }
+  box.innerHTML = `<div style="margin-bottom:14px">` + arr.map(w => `
+    <div class="warn-card">
+      <div class="warn-top"><span class="warn-order">⚠️ إنذار — الطلب #${escapeHtml(w.orderNumber || '—')}</span></div>
+      <div class="warn-note">${escapeHtml(w.note || '')}</div>
+      <div class="warn-meta">بواسطة ${escapeHtml(w.byName || '')} · ${formatDateTime(w.createdAt)}</div>
+    </div>`).join('') + `</div>`;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// TEAMMATES (same team, excluding self) — used for transfer/handoff
+// ═══════════════════════════════════════════════════════════════
+function myTeammateUids() {
+  if (!myLeaderUid) return [];
+  return Object.keys(staffAll).filter(uid =>
+    uid !== myUid && staffAll[uid] && staffAll[uid].teamLeaderUid === myLeaderUid
+  ).sort((a, b) => (staffAll[a].name || '').localeCompare(staffAll[b].name || '', 'ar'));
+}
+function fillRecipientSelect(selectEl) {
+  const uids = myTeammateUids();
+  selectEl.innerHTML = uids.map(uid =>
+    `<option value="${uid}">${escapeHtml(staffAll[uid].name || staffAll[uid].phone || uid)}</option>`
+  ).join('') || '<option value="">لا يوجد زملاء في فريقك حالياً</option>';
+}
+
+// core move: order from myUid → recipientUid, keeps history, adjusts both stats
+function transferOrderToTeammate(orderId, recipientUid, cb) {
+  const order = (selfOrdersCache && selfOrdersCache[orderId]) || null;
+  if (!order || !recipientUid) { cb && cb(false); return; }
+  const wasUnresolved = order.status === 'unresolved';
+  const newRef = fbDB.ref('teamOrders/' + myWorkspaceOwner + '/' + recipientUid).push();
+  const payload = Object.assign({}, order, {
+    status: 'unresolved',
+    transferredFrom: myUid,
+    transferredFromName: myDisplayName,
+    transferredAt: firebase.database.ServerValue.TIMESTAMP,
+    updatedAt: firebase.database.ServerValue.TIMESTAMP
+  });
+  newRef.set(payload).then(() => {
+    return fbDB.ref('teamOrders/' + myWorkspaceOwner + '/' + myUid + '/' + orderId).remove();
+  }).then(() => {
+    fbDB.ref('staffMembers/' + myWorkspaceOwner + '/' + myUid + '/orderStats').transaction(cur => {
+      cur = cur || { total: 0, resolved: 0, unresolved: 0, escalated: 0 };
+      cur.total = Math.max(0, (cur.total || 0) - 1);
+      if (wasUnresolved) cur.unresolved = Math.max(0, (cur.unresolved || 0) - 1);
+      return cur;
+    });
+    fbDB.ref('staffMembers/' + myWorkspaceOwner + '/' + recipientUid + '/orderStats').transaction(cur => {
+      cur = cur || { total: 0, resolved: 0, unresolved: 0, escalated: 0 };
+      cur.total = (cur.total || 0) + 1;
+      cur.unresolved = (cur.unresolved || 0) + 1;
+      return cur;
+    });
+    cb && cb(true);
+  }).catch(err => { alert('تعذّر التحويل: ' + err.message); cb && cb(false); });
+}
+
+// ── single order transfer ──
+let transferOrderId = null;
+function openTransferModal(orderId) {
+  transferOrderId = orderId;
+  fillRecipientSelect(document.getElementById('transferRecipient'));
+  document.getElementById('transferModal').style.display = 'flex';
+}
+function closeTransferModal() { document.getElementById('transferModal').style.display = 'none'; transferOrderId = null; }
+function submitTransfer() {
+  const recipientUid = document.getElementById('transferRecipient').value;
+  if (!recipientUid) { alert('لا يوجد زميل لتحويل الطلب إليه'); return; }
+  if (!transferOrderId) return;
+  transferOrderToTeammate(transferOrderId, recipientUid, ok => { if (ok) closeTransferModal(); });
+}
+
+// ── end of shift: bulk transfer ──
+function openEndShiftModal() {
+  const uids = Object.keys(selfOrdersCache || {}).filter(id => selfOrdersCache[id].status === 'unresolved');
+  const box = document.getElementById('endShiftOrderList');
+  if (!uids.length) {
+    box.innerHTML = '<div class="empty-state" style="padding:24px">لا يوجد طلبات غير محلولة حالياً 🎉</div>';
+  } else {
+    box.innerHTML = uids.map(id => {
+      const o = selfOrdersCache[id];
+      return `<div class="chk-row">
+        <input type="checkbox" class="endshift-chk" value="${id}" checked>
+        <div class="chk-row-mid">
+          <div class="chk-row-num">📦 ${escapeHtml(o.orderNumber || '—')}</div>
+          ${o.note ? `<div class="chk-row-note">${escapeHtml(o.note)}</div>` : ''}
+        </div>
+      </div>`;
+    }).join('');
+  }
+  fillRecipientSelect(document.getElementById('endShiftRecipient'));
+  document.getElementById('endShiftModal').style.display = 'flex';
+}
+function closeEndShiftModal() { document.getElementById('endShiftModal').style.display = 'none'; }
+function submitEndShiftTransfer() {
+  const recipientUid = document.getElementById('endShiftRecipient').value;
+  if (!recipientUid) { alert('لا يوجد زميل لتحويل الطلبات إليه'); return; }
+  const checked = Array.from(document.querySelectorAll('.endshift-chk:checked')).map(el => el.value);
+  if (!checked.length) { alert('اختر طلباً واحداً على الأقل'); return; }
+  let remaining = checked.length;
+  checked.forEach(orderId => {
+    transferOrderToTeammate(orderId, recipientUid, () => {
+      remaining--;
+      if (remaining === 0) { closeEndShiftModal(); alert('تم تحويل الطلبات بنجاح ✅'); }
+    });
+  });
+}
+
+// ═══════════════════════════════════════════════════════════════
+// DAILY REPORT — employee sends today's orders to leader (auto, in-app)
+// ═══════════════════════════════════════════════════════════════
+function todayDateKey() {
+  const d = new Date();
+  return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+}
+function startOfTodayMs() {
+  const d = new Date(); d.setHours(0, 0, 0, 0); return d.getTime();
+}
+function submitDailyReport() {
+  if (!myLeaderUid) { alert('لم يتم تعيين رئيس فريق بعد'); return; }
+  const startMs = startOfTodayMs();
+  const todaysOrders = Object.keys(selfOrdersCache || {})
+    .map(id => Object.assign({ id }, selfOrdersCache[id]))
+    .filter(o => (o.createdAt || 0) >= startMs);
+
+  if (!todaysOrders.length) { alert('لا يوجد طلبات اليوم لإرسالها'); return; }
+
+  const orderSnapshot = todaysOrders.map(o => ({
+    orderNumber: o.orderNumber || '', category: o.category || 'other',
+    note: o.note || '', status: o.status || 'unresolved', createdAt: o.createdAt || null,
+    resolutionNote: o.resolutionNote || '', escalatedNote: o.escalatedNote || ''
+  }));
+
+  const repRef = fbDB.ref('teamReports/' + myWorkspaceOwner + '/' + myLeaderUid).push();
+  repRef.set({
+    employeeUid: myUid, employeeName: myDisplayName,
+    date: todayDateKey(), createdAt: firebase.database.ServerValue.TIMESTAMP,
+    orders: orderSnapshot
+  }).then(() => {
+    alert('✅ تم إرسال تقرير اليوم لرئيس الفريق');
+  }).catch(err => alert('تعذّر إرسال التقرير: ' + err.message));
+}
+
+// ═══════════════════════════════════════════════════════════════
+// DAILY REPORTS SCREEN — leader/admin view (table matches printed layout)
+// ═══════════════════════════════════════════════════════════════
+let reportsRef = null;
+function reportResultLabel(status) {
+  if (status === 'resolved') return '<span class="rep-result-ok">✅ تم الحل</span>';
+  if (status === 'escalated') return '<span class="rep-result-esc">🔺 مصعّد لرئيس الفريق</span>';
+  return '<span class="rep-result-pending">🔶 لم يُحل بعد</span>';
+}
+function openReportsScreen() {
+  document.getElementById('reportsScreen').style.display = 'flex';
+  document.getElementById('reportsBody').innerHTML = '<div class="empty-state">جارِ التحميل...</div>';
+  if (reportsRef) reportsRef.off();
+  const leaderForReports = currentLeaderUid || myUid;
+  reportsRef = fbDB.ref('teamReports/' + myWorkspaceOwner + '/' + leaderForReports);
+  reportsRef.on('value', snap => renderReportsScreen(snap.val() || {}));
+}
+function closeReportsScreen() {
+  document.getElementById('reportsScreen').style.display = 'none';
+  if (reportsRef) { reportsRef.off(); reportsRef = null; }
+}
+function renderReportsScreen(reports) {
+  const arr = Object.keys(reports).map(id => Object.assign({ id }, reports[id]))
+    .sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+  const body = document.getElementById('reportsBody');
+  if (!arr.length) { body.innerHTML = '<div class="empty-state">لا يوجد تقارير مُرسَلة بعد</div>'; return; }
+
+  // group by date
+  const byDate = {};
+  arr.forEach(r => { (byDate[r.date] = byDate[r.date] || []).push(r); });
+
+  body.innerHTML = Object.keys(byDate).sort().reverse().map(date => {
+    const reportsForDay = byDate[date];
+    const rows = [];
+    reportsForDay.forEach(r => {
+      (r.orders || []).forEach(o => {
+        const solutionText = o.resolutionNote || o.escalatedNote || '';
+        rows.push(`<tr>
+          <td class="rep-emp-cell">${escapeHtml(r.employeeName || '')}</td>
+          <td>${escapeHtml(o.orderNumber || '—')}</td>
+          <td>${escapeHtml(CATEGORY_LABELS[o.category] || CATEGORY_LABELS.other)}${o.note ? ' — ' + escapeHtml(o.note) : ''}</td>
+          <td>${solutionText ? escapeHtml(solutionText) : '—'}</td>
+          <td>${reportResultLabel(o.status)}</td>
+          <td>${formatDateTime(o.createdAt)}</td>
+        </tr>`);
+      });
+    });
+    return `<div class="rep-day-block">
+      <div class="rep-day-title">التقارير اليومية — ${escapeHtml(date)}</div>
+      <table class="rep-table">
+        <thead><tr><th>الموظف</th><th>رقم الوصل/العميل</th><th>المشكلة</th><th>الحل</th><th>النتيجة</th><th>التاريخ</th></tr></thead>
+        <tbody>${rows.join('')}</tbody>
+      </table>
+    </div>`;
+  }).join('');
+}
+</script>
+</body>
+</html>
