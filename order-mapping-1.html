@@ -1,0 +1,252 @@
+<!--
+مطابقة الأسماء وعدّاد الطلبات — وحدة مستقلة ضمن متابعة
+الموقع من تصميم وتطوير أحمد ماجد سجاد
+-->
+<!DOCTYPE html>
+<html dir="rtl" lang="ar">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>مطابقة الأسماء - عدد الطلبات</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800&display=swap" rel="stylesheet">
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-database-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-auth-compat.js"></script>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: 'Tajawal', Tahoma, Arial, sans-serif;
+  background: #f3f6fa; color: #1e293b; direction: rtl; font-size: 14.5px;
+  padding: 24px;
+}
+h1 { font-size: 1.4rem; color: #0b1f3a; margin-bottom: 4px; }
+.sub { color: #5c6c85; margin-bottom: 24px; font-size: 0.9rem; }
+
+.card {
+  background: #fff; border: 1px solid #e7ecf3; border-radius: 16px;
+  padding: 20px; margin-bottom: 22px; box-shadow: 0 8px 20px rgba(6,14,28,0.05);
+}
+.card h2 { font-size: 1.05rem; color: #0b1f3a; margin-bottom: 14px; }
+
+table { width: 100%; border-collapse: collapse; }
+th, td { padding: 10px 8px; text-align: right; border-bottom: 1px solid #eef1f6; font-size: 13.5px; }
+th { color: #5c6c85; font-weight: 700; background: #f8fafc; }
+tr:last-child td { border-bottom: none; }
+
+select, button {
+  font-family: inherit; font-size: 13.5px; border-radius: 9px; border: 1.5px solid #dfe6f0;
+  padding: 7px 10px; background: #fff; cursor: pointer;
+}
+button.primary { background: #1d3f8f; color: #fff; border: none; font-weight: 700; }
+button.primary:hover { background: #163174; }
+.empty { color: #94a3b8; text-align: center; padding: 24px; font-size: 13.5px; }
+.badge { display: inline-block; background: #eef2fb; color: #1d3f8f; padding: 2px 9px; border-radius: 20px; font-size: 12px; font-weight: 700; }
+.pill-count { background: #e8f7ee; color: #146c3a; padding: 2px 10px; border-radius: 20px; font-weight: 800; }
+.pill-time { background: #fff4e5; color: #a15c00; padding: 2px 10px; border-radius: 20px; font-weight: 700; }
+</style>
+</head>
+<body>
+
+<h1>مطابقة الأسماء وعدّاد الطلبات</h1>
+<div class="sub">الأسماء القادمة من نظام الشركة (prime-iq.com) لا تُطابق أسماء الموظفين في متابعة تلقائياً — اربطها هنا مرة واحدة لكل موظف.</div>
+
+<div class="card">
+  <h2>أسماء بانتظار المطابقة</h2>
+  <table id="pendingTable">
+    <thead><tr><th>الاسم في نظام الشركة</th><th>ربط بموظف</th><th></th></tr></thead>
+    <tbody id="pendingBody"></tbody>
+  </table>
+  <div id="pendingEmpty" class="empty" style="display:none;">لا توجد أسماء بانتظار المطابقة حالياً</div>
+</div>
+
+<div class="card">
+  <h2>عدد الطلبات المُعالجة (اليوم)</h2>
+  <table>
+    <thead><tr><th>الموظف</th><th>عدد الطلبات المكتملة</th><th>متوسط وقت المعالجة</th><th>طلبات لم تُكمل</th></tr></thead>
+    <tbody id="countsBody"></tbody>
+  </table>
+  <div id="countsEmpty" class="empty" style="display:none;">لا توجد بيانات لهذا اليوم بعد</div>
+</div>
+
+<script>
+// ── نفس إعداد Firebase المستخدم في باقي متابعة ──
+const firebaseConfig = {
+  apiKey: "AIzaSyA1q9LiS6EXNCBFmFvytyN-p4KKgP9wym4",
+  authDomain: "prime-e-8eb80.firebaseapp.com",
+  databaseURL: "https://prime-e-8eb80-default-rtdb.firebaseio.com",
+  projectId: "prime-e-8eb80",
+  storageBucket: "prime-e-8eb80.firebasestorage.app",
+  messagingSenderId: "671376930301",
+  appId: "1:671376930301:web:f8b61666314f3149fb5594"
+};
+firebase.initializeApp(firebaseConfig);
+const fbDB = firebase.database();
+const fbAuth = firebase.auth();
+
+// workspaceOwner و canEdit يصلان من login عبر رابط الـ iframe (نفس نمط
+// badala.html) — لا حاجة لتعديل شيء يدوياً هنا بعد الآن.
+const _qs = new URLSearchParams(location.search);
+const WORKSPACE_OWNER = _qs.get('workspaceOwner') || '';
+const CAN_EDIT = _qs.get('canEdit') === '1';
+
+let staffList = []; // [{uid, name}]
+
+function todayKey() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+}
+
+// ── تحميل قائمة الموظفين للقائمة المنسدلة ──
+async function loadStaff() {
+  const snap = await fbDB.ref(`staffMembers/${WORKSPACE_OWNER}`).once('value');
+  const val = snap.val() || {};
+  staffList = Object.entries(val).map(([uid, v]) => ({
+    uid,
+    name: v.name || v.fullName || uid
+  }));
+}
+
+// ── الأسماء غير المُطابقة ──
+function renderPending(pendingNames, nameMap) {
+  const body = document.getElementById('pendingBody');
+  const emptyEl = document.getElementById('pendingEmpty');
+  body.innerHTML = '';
+  const unmatched = Object.keys(pendingNames || {}).filter(n => !(nameMap && nameMap[n]));
+
+  if (unmatched.length === 0) {
+    emptyEl.style.display = 'block';
+    return;
+  }
+  emptyEl.style.display = 'none';
+
+  unmatched.forEach(rawName => {
+    const tr = document.createElement('tr');
+    const options = staffList.map(s => `<option value="${s.uid}">${s.name}</option>`).join('');
+    const linkCell = CAN_EDIT
+      ? `<select id="sel-${btoa(encodeURIComponent(rawName))}">
+          <option value="">اختر الموظف...</option>
+          ${options}
+        </select>`
+      : `<span class="badge">عرض فقط</span>`;
+    tr.innerHTML = `
+      <td>${rawName} <span class="badge">غير مُطابق</span></td>
+      <td>${linkCell}</td>
+      <td>${CAN_EDIT ? `<button class="primary" data-name="${rawName}">ربط</button>` : ''}</td>
+    `;
+    body.appendChild(tr);
+  });
+
+  if (!CAN_EDIT) return; // view-only access — no linking allowed
+
+  body.querySelectorAll('button.primary').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const rawName = btn.getAttribute('data-name');
+      const sel = document.getElementById(`sel-${btoa(encodeURIComponent(rawName))}`);
+      const uid = sel.value;
+      if (!uid) { alert('اختر موظفاً أولاً'); return; }
+      await fbDB.ref(`nameMap/${encodeURIComponent(rawName)}`).set(uid);
+      loadEverything();
+    });
+  });
+}
+
+// ── تجميع الأحداث اليومية: مطابقة start/end بالتسلسل الزمني لكل اسم ──
+function aggregateCounts(events, nameMap) {
+  const byRawName = {};
+  Object.values(events || {}).forEach(ev => {
+    if (!ev.rawName || !ev.timestamp) return;
+    const d = new Date(ev.timestamp);
+    const key = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+    if (key !== todayKey()) return;
+    if (!byRawName[ev.rawName]) byRawName[ev.rawName] = [];
+    byRawName[ev.rawName].push(ev);
+  });
+
+  const results = {}; // uid -> {completed, totalSeconds, openCount}
+
+  Object.entries(byRawName).forEach(([rawName, evs]) => {
+    const uid = nameMap && nameMap[rawName];
+    if (!uid) return; // still pending, skip from counts until mapped
+    evs.sort((a, b) => a.timestamp - b.timestamp);
+
+    if (!results[uid]) results[uid] = { completed: 0, totalSeconds: 0, openCount: 0 };
+    let pendingStart = null;
+    evs.forEach(ev => {
+      if (ev.type === 'order_start') {
+        pendingStart = ev.timestamp;
+      } else if (ev.type === 'order_end') {
+        if (pendingStart) {
+          results[uid].completed += 1;
+          results[uid].totalSeconds += (ev.timestamp - pendingStart) / 1000;
+          pendingStart = null;
+        } else {
+          // end with no matching start still counts as a completed order
+          results[uid].completed += 1;
+        }
+      }
+    });
+    if (pendingStart) results[uid].openCount += 1; // started but not finished yet
+  });
+
+  return results;
+}
+
+function renderCounts(results) {
+  const body = document.getElementById('countsBody');
+  const emptyEl = document.getElementById('countsEmpty');
+  body.innerHTML = '';
+  const uids = Object.keys(results);
+
+  if (uids.length === 0) {
+    emptyEl.style.display = 'block';
+    return;
+  }
+  emptyEl.style.display = 'none';
+
+  uids.forEach(uid => {
+    const staff = staffList.find(s => s.uid === uid);
+    const r = results[uid];
+    const avgSec = r.completed > 0 ? Math.round(r.totalSeconds / r.completed) : 0;
+    const avgLabel = avgSec > 0 ? `${Math.floor(avgSec/60)} د ${avgSec%60} ث` : '—';
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td>${staff ? staff.name : uid}</td>
+      <td><span class="pill-count">${r.completed}</span></td>
+      <td><span class="pill-time">${avgLabel}</span></td>
+      <td>${r.openCount || 0}</td>
+    `;
+    body.appendChild(tr);
+  });
+}
+
+async function loadEverything() {
+  await loadStaff();
+  const [pendingSnap, mapSnap, eventsSnap] = await Promise.all([
+    fbDB.ref('pendingNames').once('value'),
+    fbDB.ref('nameMap').once('value'),
+    fbDB.ref('orderEvents').once('value')
+  ]);
+  const pendingNames = pendingSnap.val();
+  const nameMap = mapSnap.val();
+  const events = eventsSnap.val();
+
+  renderPending(pendingNames, nameMap);
+  const results = aggregateCounts(events, nameMap);
+  renderCounts(results);
+}
+
+if (!WORKSPACE_OWNER) {
+  document.body.insertAdjacentHTML('afterbegin', '<div class="empty">لم يتم تمرير معرّف مساحة العمل — افتح هذه الصفحة من داخل متابعة</div>');
+} else {
+  fbAuth.signInAnonymously().then(loadEverything).catch(err => {
+    console.error('auth failed', err);
+    document.body.insertAdjacentHTML('afterbegin', '<div class="empty">تعذر الاتصال — تحقق من إعدادات Firebase</div>');
+  });
+}
+
+// تحديث تلقائي كل 30 ثانية
+setInterval(loadEverything, 30000);
+</script>
+</body>
+</html>
