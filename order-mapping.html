@@ -267,6 +267,49 @@ const _qs = new URLSearchParams(location.search);
 const WORKSPACE_OWNER = _qs.get('workspaceOwner') || '';
 const CAN_EDIT = _qs.get('canEdit') === '1';
 
+// ══════════════════════════════════════════════════════════════════
+// POCKETBASE (monitoring telemetry: order_events / audit_events / break_events)
+// ══════════════════════════════════════════════════════════════════
+// nameMap / staffMembers / pendingNames still come from Firebase above.
+// Must match the PB_BASE_URL / PB_API_KEY set in content.js.
+const PB_BASE_URL = "http://127.0.0.1:8090";
+const PB_API_KEY = "CHANGE-ME-shared-secret";
+
+// Fetches ALL matching records, following PocketBase's pagination
+// (default perPage caps at 500) so a busy day's events aren't
+// silently truncated. Returns a plain array (Object.values-friendly
+// call sites below just iterate it directly).
+async function pbList(collection, filter) {
+  const perPage = 500;
+  let page = 1;
+  let all = [];
+  while (true) {
+    const params = new URLSearchParams({
+      filter,
+      sort: 'timestamp',
+      page: String(page),
+      perPage: String(perPage)
+    });
+    const res = await fetch(
+      `${PB_BASE_URL}/api/collections/${collection}/records?${params.toString()}`,
+      { headers: { 'X-Api-Key': PB_API_KEY } }
+    );
+    if (!res.ok) {
+      console.error('[متابعة] PocketBase read failed', collection, res.status);
+      return all;
+    }
+    const data = await res.json();
+    all = all.concat(data.items || []);
+    if (page >= (data.totalPages || 1)) break;
+    page++;
+  }
+  return all;
+}
+
+function pbTimeFilter(start, end) {
+  return `(timestamp>=${start} && timestamp<${end})`;
+}
+
 let staffList = [];
 
 function dbg(msg) {
@@ -1168,13 +1211,7 @@ async function fetchAuditBaseline(nameMap, dayStart, windowStart) {
   // for today — using it wrongly subtracts yesterday's total from
   // today's count. Bound the query with startAt(dayStart) so only
   // same-day events before the shift window are considered.
-  const snap = await fbDB.ref('auditEvents')
-    .orderByChild('timestamp')
-    .startAt(dayStart)
-    .endAt(windowStart - 1)
-    .limitToLast(1000)
-    .once('value');
-  const events = snap.val();
+  const events = await pbList('audit_events', pbTimeFilter(dayStart, windowStart));
   const baselineByUid = {};
   Object.values(events || {}).forEach(ev => {
     if (!ev.rawName || !ev.timestamp || typeof ev.count !== 'number') return;
@@ -1254,20 +1291,19 @@ async function loadEverything() {
   const isToday = selectedDateKey === todayKey();
   const isLive = isToday && Date.now() < windowBounds.end;
 
-  const [pendingSnap, mapSnap, eventsSnap, auditSnap, breakSnap] = await Promise.all([
+  const dayFilter = pbTimeFilter(fullDayBounds.start, fullDayBounds.end);
+
+  const [pendingSnap, mapSnap, events, auditEvents, breakEvents] = await Promise.all([
     fbDB.ref('pendingNames').once('value'),
     fbDB.ref('nameMap').once('value'),
-    fbDB.ref('orderEvents').orderByChild('timestamp').startAt(fullDayBounds.start).endAt(fullDayBounds.end - 1).once('value'),
-    fbDB.ref('auditEvents').orderByChild('timestamp').startAt(fullDayBounds.start).endAt(fullDayBounds.end - 1).once('value'),
-    fbDB.ref('breakEvents').orderByChild('timestamp').startAt(fullDayBounds.start).endAt(fullDayBounds.end - 1).once('value')
+    pbList('order_events', dayFilter),
+    pbList('audit_events', dayFilter),
+    pbList('break_events', dayFilter)
   ]);
 
   const pendingNames = pendingSnap.val();
   const rawMap = mapSnap.val();
   const nameMap = normalizeMap(rawMap);
-  const events = eventsSnap.val();
-  const auditEvents = auditSnap.val();
-  const breakEvents = breakSnap.val();
 
   renderPending(pendingNames, nameMap);
 
