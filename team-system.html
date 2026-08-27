@@ -186,30 +186,6 @@ Firebase Realtime Database:
 </style>
 </head>
 <body>
-<!-- SYSTEM DISABLED -->
-<div style="background:#3a1f0b; color:#ffdca8; font-family:sans-serif; font-size:16px; padding:24px 20px; border-radius:10px; margin:16px; text-align:center; line-height:1.8;">
-  🚧 بسبب عدم وجود دعم من شركة برايم، تم إيقاف هذا النظام مؤقتاً.<br>
-  نأمل أن يعود العمل به مع نهاية هذا الشهر.<br>
-  نعتذر عن الإزعاج، ونشكركم على استخدام هذه الخدمة. 🙏
-  <div style="margin-top:16px;">
-    <button onclick="tlGoBack()" style="background:rgba(255,255,255,0.12); border:1px solid rgba(255,220,168,0.4); color:#ffdca8; padding:9px 20px; border-radius:9px; cursor:pointer; font-family:inherit; font-size:0.9rem;">
-      ← رجوع لاختيار النظام
-    </button>
-  </div>
-</div>
-<script>
-  // Self-contained copy of this page's own goBack(), inlined here since
-  // the kill switch below prevents the rest of the page (including the
-  // original goBack() definition) from ever loading.
-  function tlGoBack() { if (window.parent && window.parent !== window && typeof window.parent.backToChooserFromTeamSystem === 'function') { window.parent.backToChooserFromTeamSystem(); } else if (window.parent && window.parent !== window && typeof window.parent.backToChooserFromDepartments === 'function') { window.parent.backToChooserFromDepartments(); } else { history.back(); } }
-</script>
-<script>
-  // Kill switch: stops the page from loading/executing anything below
-  // this point (Firebase init, reads, writes) to fully halt usage.
-  // To re-enable: delete this injected block.
-  window.stop();
-</script>
-
 
 <div class="topbar">
   <button class="topbar-back" onclick="goBack()">→ رجوع لاختيار النظام</button>

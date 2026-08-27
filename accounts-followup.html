@@ -445,18 +445,7 @@
   </div>
 </div>
 
-<!-- SYSTEM DISABLED -->
-<div style="background:#3a1f0b; color:#ffdca8; font-family:sans-serif; font-size:16px; padding:24px 20px; border-radius:10px; margin:16px; text-align:center; line-height:1.8;">
-  🚧 بسبب عدم وجود دعم من شركة برايم، تم إيقاف هذا النظام مؤقتاً.<br>
-  نأمل أن يعود العمل به مع نهاية هذا الشهر.<br>
-  نعتذر عن الإزعاج، ونشكركم على استخدام هذه الخدمة. 🙏
-</div>
-<!--
-  Kill switch: script type changed from "module" to "disabled-module"
-  so the browser never fetches/executes it (no Firebase init, no
-  reads, no writes). To re-enable: change the type back to "module".
--->
-<script type="disabled-module">
+<script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.16.0/firebase-app.js";
 import {
   getDatabase, ref, set, onValue, update, get
