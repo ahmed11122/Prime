@@ -663,7 +663,7 @@ tr:hover td { background: #fafafa; }
 <div class="card-panel">
 <div class="card-header">
 <div class="card-title">متابعة الطلبات المباشرة</div>
-<div class="card-subtitle">عدد الطلبات (تحت التدقيق) لكل موظف لحظيًا، وحالة العمل/الاستراحة، مع إمكانية التحكم يدويًا من هنا.</div>
+<div class="card-subtitle">عدد الطلبات (تحت التدقيق) لكل موظف لحظيًا، وحالة العمل/الاستراحة، وتحذيرات تجاوز وقت الاستراحة اليوم (أكثر من 3 = تنزيل تقييم)، مع إمكانية التحكم يدويًا من هنا.</div>
 </div>
 <div id="queueMonitorList">
 <div style="text-align:center;color:#94a3b8;padding:16px;">جارِ التحميل...</div>
@@ -2821,8 +2821,19 @@ function sanitizeNameKey(name) {
 //   lastUpdate: <server timestamp>,
 //   breakStartedAt: <timestamp or null>,  // set when working=false
 //   adminForce: "working" | "break" | null // admin override written from this panel; extension must read + obey this
+//   warningsToday: 2,            // # of break-overrun warnings today (resets daily on the extension side)
+//   warningsDate: "2026-9-22"    // date key the count above belongs to — must match todayDateKey() here
+//   breakLimitMinutes: 15,       // set from this panel; extension uses this instead of its 15-min default
+//   popup: { id, text, createdAt } // one-off message set from this panel, shown once by the extension
 // }
 function queueMonitorRef() { return fbDB.ref('queueMonitor/' + myWorkspaceOwner); }
+
+// Must match todayKey() in content-queuemonitor.js exactly, so a warning
+// reported today doesn't silently show as stale/expired here.
+function todayDateKey() {
+const d = new Date();
+return `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`;
+}
 let _queueMonitorListenerAttached = false;
 
 // Fair-share batching:
@@ -2906,9 +2917,9 @@ const targetLabel = (isWorking && target != null)
 let breakInfo = '';
 if (!isWorking && emp.breakStartedAt) {
 const mins = Math.floor((Date.now() - emp.breakStartedAt) / 60000);
-const over = mins >= 15;
+const over = mins >= breakLimit;
 breakInfo = `<div style="font-size:0.75rem;margin-top:2px;color:${over ? '#dc2626' : '#64748b'};font-weight:${over ? '800' : '400'}">
-${over ? '⚠️ تجاوز 15 دقيقة — ' : ''}منذ ${mins} دقيقة
+${over ? `⚠️ تجاوز ${breakLimit} دقيقة — ` : ''}منذ ${mins} دقيقة <span style="color:#94a3b8;">(الحد: ${breakLimit}د)</span>
 </div>`;
 }
 
@@ -2920,11 +2931,19 @@ const forceBadge = adminForce
 ? `<div style="font-size:0.72rem;color:#2563eb;margin-top:2px;">إجبار المشرف: ${adminForce === 'working' ? 'عمل' : 'استراحة'}</div>`
 : '';
 
+const breakLimit = (typeof emp.breakLimitMinutes === 'number') ? emp.breakLimitMinutes : 15;
+const warnCount = (typeof emp.warningsToday === 'number' && emp.warningsDate === todayDateKey()) ? emp.warningsToday : 0;
+const overEval = warnCount > 3;
+const warnBadge = warnCount > 0
+? `<span style="background:${overEval ? '#fecaca' : '#fee2e2'};color:${overEval ? '#7f1d1d' : '#b91c1c'};padding:2px 12px;border-radius:20px;font-weight:800;font-size:0.85rem;">⚠️ ${warnCount}</span>${overEval ? '<div style="font-size:0.7rem;color:#b91c1c;margin-top:2px;font-weight:700;">تنزيل تقييم</div>' : ''}`
+: '<span style="color:#94a3b8;font-size:0.85rem;">—</span>';
+
 return `
 <tr>
 <td style="font-weight:700">${name}${posLabel}</td>
 <td style="text-align:center"><span style="background:${count > 0 ? '#eff6ff' : '#f1f5f9'};color:${count > 0 ? '#2563eb' : '#94a3b8'};padding:2px 12px;border-radius:20px;font-weight:800;font-size:0.85rem;">${count}</span>${targetLabel}</td>
 <td>${statusBadge}${breakInfo}${forceBadge}</td>
+<td style="text-align:center">${warnBadge}</td>
 <td style="color:#64748b;font-size:0.82rem;">${lastUpdate}</td>
 <td>
 <button class="btn" style="padding:5px 10px;font-size:0.78rem;" onclick="forceEmployeeState('${key}','working')">إجبار عمل</button>
@@ -2935,6 +2954,16 @@ ${adminForce ? `<button class="btn" style="padding:5px 10px;font-size:0.78rem;" 
 style="width:64px;padding:3px 6px;border-radius:6px;border:1px solid var(--border);font-size:0.78rem;">
 <button class="btn" style="padding:4px 8px;font-size:0.75rem;" onclick="setManualQuota('${key}')">تعيين</button>
 ${isManual ? `<button class="btn" style="padding:4px 8px;font-size:0.75rem;" onclick="clearManualQuota('${key}')">تلقائي</button>` : ''}
+</div>
+<div style="margin-top:6px;display:flex;align-items:center;gap:4px;" title="مدة الاستراحة بالدقائق لهذا الموظف">
+<input id="qm-breaklimit-input-${key}" type="number" min="1" placeholder="${breakLimit}"
+style="width:64px;padding:3px 6px;border-radius:6px;border:1px solid var(--border);font-size:0.78rem;">
+<button class="btn" style="padding:4px 8px;font-size:0.75rem;" onclick="setBreakLimit('${key}')">⏱️ وقت الاستراحة</button>
+</div>
+<div style="margin-top:6px;display:flex;align-items:center;gap:4px;">
+<input id="qm-popup-input-${key}" type="text" placeholder="رسالة فورية..."
+style="width:120px;padding:3px 6px;border-radius:6px;border:1px solid var(--border);font-size:0.78rem;">
+<button class="btn" style="padding:4px 8px;font-size:0.75rem;" onclick="sendEmployeePopup('${key}')">📢 إرسال</button>
 </div>
 </td>
 </tr>`;
@@ -2947,6 +2976,7 @@ container.innerHTML = poolBanner + `
 <th style="padding:8px">الموظف</th>
 <th style="padding:8px;text-align:center">طلبات تحت التدقيق</th>
 <th style="padding:8px">الحالة</th>
+<th style="padding:8px;text-align:center">تحذيرات اليوم</th>
 <th style="padding:8px">آخر تحديث</th>
 <th style="padding:8px">تحكم يدوي</th>
 </tr>
@@ -2967,6 +2997,36 @@ queueMonitorRef().child(employeeKey).update({ targetAssign: n, manualTarget: tru
 function clearManualQuota(employeeKey) {
 queueMonitorRef().child(employeeKey).update({ manualTarget: null })
 .catch(err => alert('فشل تنفيذ الأمر: ' + err.message));
+}
+
+// Per-employee break duration (minutes). Read by the extension via
+// GET /queuemonitor/state (breakLimitMinutes) and used instead of its
+// own 15-min default — lets a manager shorten/extend break time for a
+// specific person depending on current load.
+function setBreakLimit(employeeKey) {
+const input = document.getElementById('qm-breaklimit-input-' + employeeKey);
+if (!input) return;
+const n = parseInt(input.value, 10);
+if (isNaN(n) || n <= 0) { alert('أدخل عدد دقائق صحيح'); return; }
+queueMonitorRef().child(employeeKey).update({ breakLimitMinutes: n })
+.then(() => { input.value = ''; })
+.catch(err => alert('فشل تنفيذ الأمر: ' + err.message));
+}
+
+// Instant one-off popup message to a single employee. The extension
+// polls every few seconds and shows it as a modal as soon as it lands
+// (no read-receipt tracking like the department announcements above —
+// this is meant for quick "right now" nudges, not broadcasts).
+function sendEmployeePopup(employeeKey) {
+const input = document.getElementById('qm-popup-input-' + employeeKey);
+if (!input) return;
+const text = (input.value || '').trim();
+if (!text) { alert('اكتب نص الرسالة أولاً'); return; }
+queueMonitorRef().child(employeeKey).update({
+popup: { id: Date.now(), text, createdAt: Date.now() }
+})
+.then(() => { input.value = ''; })
+.catch(err => alert('فشل الإرسال: ' + err.message));
 }
 
 function forceEmployeeState(employeeKey, forceValue) {
@@ -3047,11 +3107,6 @@ function doLogout() { fbAuth.signOut(); }
 //  one comes in.
 // ═══════════════════════════════════════════════════════════════
 function callAlertsRef() { return fbDB.ref('callAlerts/' + myWorkspaceOwner); }
-// Bounded ref for the live child_added notifier — only the most recent
-// alerts, so attaching the listener doesn't replay the entire history
-// and freeze the tab (the old unbounded ref fired child_added once per
-// alert ever recorded, each triggering a full re-fetch + DOM rebuild).
-function callAlertsRecentRef() { return callAlertsRef().limitToLast(50); }
 
 function formatAlertDuration(seconds) {
   const n = Number(seconds);
@@ -3144,19 +3199,10 @@ function initCallAlertNotifications() {
   loadCallAlerts(); // initial badge count, even before the tab is ever opened
 
   const startTime = Date.now();
-  let callAlertsRefreshTimer = null;
-  function scheduleCallAlertsRefresh() {
-    // Debounce: several child_added events can arrive in a burst (initial
-    // attach, or several calls landing close together) — collapse them
-    // into a single loadCallAlerts() instead of one full re-fetch + DOM
-    // rebuild per event.
-    clearTimeout(callAlertsRefreshTimer);
-    callAlertsRefreshTimer = setTimeout(loadCallAlerts, 300);
-  }
-  callAlertsRecentRef().on('child_added', snap => {
+  callAlertsRef().on('child_added', snap => {
     const a = snap.val();
     if (!a) return;
-    scheduleCallAlertsRefresh(); // keeps the badge + list (if open) correct either way
+    loadCallAlerts(); // keeps the badge + list (if open) correct either way
 
     if (!a.createdAt || a.createdAt < startTime) return; // ignore pre-existing ones on attach
     if (a.status === 'reviewed') return;
