@@ -2835,7 +2835,7 @@ function recomputeQueueAssignments(data) {
 if (!data) return;
 const poolCount = (data._pool && typeof data._pool.count === 'number') ? data._pool.count : 0;
 const workingKeys = Object.keys(data)
-.filter(k => k !== '_pool' && data[k] && data[k].working === true)
+.filter(k => k !== '_pool' && data[k] && data[k].working === true && !data[k].manualTarget)
 // FIFO order: whoever pressed بدء العمل first gets served first when there isn't enough for everyone
 .sort((a, b) => (data[a].queueJoinedAt || 0) - (data[b].queueJoinedAt || 0));
 
@@ -2894,11 +2894,14 @@ const count = (typeof emp.queueCount === 'number') ? emp.queueCount : 0;
 const isWorking = !!emp.working;
 const adminForce = emp.adminForce || null;
 const target = (typeof emp.targetAssign === 'number') ? emp.targetAssign : null;
+const isManual = !!emp.manualTarget;
 const lastUpdate = emp.lastUpdate ? new Date(emp.lastUpdate).toLocaleTimeString('ar-IQ') : '—';
 
 if (isWorking) queuePosition++;
 const posLabel = isWorking ? `<div style="font-size:0.72rem;color:#2563eb;margin-top:2px;">الدور: ${queuePosition}</div>` : '';
-const targetLabel = (isWorking && target) ? `<div style="font-size:0.72rem;color:#0f172a;margin-top:2px;">الحصة الحالية: ${target}</div>` : '';
+const targetLabel = (isWorking && target != null)
+? `<div style="font-size:0.72rem;color:#0f172a;margin-top:2px;">الحصة الحالية: ${target}${isManual ? ' (يدوي)' : ''}</div>`
+: '';
 
 let breakInfo = '';
 if (!isWorking && emp.breakStartedAt) {
@@ -2927,6 +2930,12 @@ return `
 <button class="btn" style="padding:5px 10px;font-size:0.78rem;" onclick="forceEmployeeState('${key}','working')">إجبار عمل</button>
 <button class="btn" style="padding:5px 10px;font-size:0.78rem;" onclick="forceEmployeeState('${key}','break')">إجبار استراحة</button>
 ${adminForce ? `<button class="btn" style="padding:5px 10px;font-size:0.78rem;" onclick="forceEmployeeState('${key}',null)">إلغاء الإجبار</button>` : ''}
+<div style="margin-top:6px;display:flex;align-items:center;gap:4px;">
+<input id="qm-quota-input-${key}" type="number" min="0" placeholder="${target != null ? target : 'حصة'}"
+style="width:64px;padding:3px 6px;border-radius:6px;border:1px solid var(--border);font-size:0.78rem;">
+<button class="btn" style="padding:4px 8px;font-size:0.75rem;" onclick="setManualQuota('${key}')">تعيين</button>
+${isManual ? `<button class="btn" style="padding:4px 8px;font-size:0.75rem;" onclick="clearManualQuota('${key}')">تلقائي</button>` : ''}
+</div>
 </td>
 </tr>`;
 }).join('');
@@ -2944,6 +2953,20 @@ container.innerHTML = poolBanner + `
 </thead>
 <tbody>${rows}</tbody>
 </table>`;
+}
+
+function setManualQuota(employeeKey) {
+const input = document.getElementById('qm-quota-input-' + employeeKey);
+if (!input) return;
+const n = parseInt(input.value, 10);
+if (isNaN(n) || n < 0) { alert('أدخل رقمًا صحيحًا'); return; }
+queueMonitorRef().child(employeeKey).update({ targetAssign: n, manualTarget: true })
+.catch(err => alert('فشل تنفيذ الأمر: ' + err.message));
+}
+
+function clearManualQuota(employeeKey) {
+queueMonitorRef().child(employeeKey).update({ manualTarget: null })
+.catch(err => alert('فشل تنفيذ الأمر: ' + err.message));
 }
 
 function forceEmployeeState(employeeKey, forceValue) {
@@ -3024,6 +3047,11 @@ function doLogout() { fbAuth.signOut(); }
 //  one comes in.
 // ═══════════════════════════════════════════════════════════════
 function callAlertsRef() { return fbDB.ref('callAlerts/' + myWorkspaceOwner); }
+// Bounded ref for the live child_added notifier — only the most recent
+// alerts, so attaching the listener doesn't replay the entire history
+// and freeze the tab (the old unbounded ref fired child_added once per
+// alert ever recorded, each triggering a full re-fetch + DOM rebuild).
+function callAlertsRecentRef() { return callAlertsRef().limitToLast(50); }
 
 function formatAlertDuration(seconds) {
   const n = Number(seconds);
@@ -3116,10 +3144,19 @@ function initCallAlertNotifications() {
   loadCallAlerts(); // initial badge count, even before the tab is ever opened
 
   const startTime = Date.now();
-  callAlertsRef().on('child_added', snap => {
+  let callAlertsRefreshTimer = null;
+  function scheduleCallAlertsRefresh() {
+    // Debounce: several child_added events can arrive in a burst (initial
+    // attach, or several calls landing close together) — collapse them
+    // into a single loadCallAlerts() instead of one full re-fetch + DOM
+    // rebuild per event.
+    clearTimeout(callAlertsRefreshTimer);
+    callAlertsRefreshTimer = setTimeout(loadCallAlerts, 300);
+  }
+  callAlertsRecentRef().on('child_added', snap => {
     const a = snap.val();
     if (!a) return;
-    loadCallAlerts(); // keeps the badge + list (if open) correct either way
+    scheduleCallAlertsRefresh(); // keeps the badge + list (if open) correct either way
 
     if (!a.createdAt || a.createdAt < startTime) return; // ignore pre-existing ones on attach
     if (a.status === 'reviewed') return;
