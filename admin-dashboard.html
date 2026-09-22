@@ -2929,13 +2929,17 @@ ${over ? `⚠️ تجاوز ${breakLimit} دقيقة — ` : ''}منذ ${mins} �
 </div>`;
 }
 
-const statusBadge = adminForce === 'maintenance'
+const statusBadge = adminForce === 'ended'
+? '<span style="background:#e2e8f0;color:#334155;padding:2px 10px;border-radius:20px;font-size:0.78rem;font-weight:700;">⏹️ انتهى الدوام</span>'
+: adminForce === 'maintenance'
 ? '<span style="background:#fecaca;color:#7f1d1d;padding:2px 10px;border-radius:20px;font-size:0.78rem;font-weight:700;">🔧 صيانة</span>'
 : isWorking
 ? `<span style="background:#dcfce7;color:#166534;padding:2px 10px;border-radius:20px;font-size:0.78rem;font-weight:700;">يعمل — ${count} طلب</span>`
 : '<span style="background:#fef3c7;color:#92400e;padding:2px 10px;border-radius:20px;font-size:0.78rem;font-weight:700;">استراحة</span>';
 
-const forceBadge = adminForce === 'maintenance'
+const forceBadge = adminForce === 'ended'
+? '<div style="font-size:0.72rem;color:#475569;margin-top:2px;font-weight:800;">⏹️ الدوام منتهٍ — لا يمكنه العودة للعمل حتى تُلغي الإجبار</div>'
+: adminForce === 'maintenance'
 ? '<div style="font-size:0.72rem;color:#dc2626;margin-top:2px;font-weight:800;">⚠️ الجهاز محدد كـ صيانة — تنبيه فقط، لا يمنع الموظف فعليًا</div>'
 : adminForce
 ? `<div style="font-size:0.72rem;color:#2563eb;margin-top:2px;">إجبار المشرف: ${adminForce === 'working' ? 'عمل' : 'استراحة'}</div>`
@@ -2957,6 +2961,7 @@ return `
 <td>
 <button class="btn" style="padding:5px 10px;font-size:0.78rem;" onclick="forceEmployeeState('${key}','working')">إجبار عمل</button>
 <button class="btn" style="padding:5px 10px;font-size:0.78rem;" onclick="forceEmployeeState('${key}','break')">إجبار استراحة</button>
+<button class="btn" style="padding:5px 10px;font-size:0.78rem;background:${adminForce === 'ended' ? '#475569' : ''};color:${adminForce === 'ended' ? '#fff' : ''};" onclick="if(confirm('إنهاء الدوام لهذا الموظف؟ لن يتمكن من العودة للعمل حتى تُلغي الإجبار.')) forceEmployeeState('${key}','ended')" title="يوقفه عن العمل ويمنعه من الضغط على بدء العمل حتى تُلغي الإجبار">⏹️ إنهاء الدوام</button>
 <button class="btn" style="padding:5px 10px;font-size:0.78rem;background:${adminForce === 'maintenance' ? '#dc2626' : ''};color:${adminForce === 'maintenance' ? '#fff' : ''};" onclick="forceEmployeeState('${key}','maintenance')" title="علامة/تنبيه فقط — لا يمنع الموظف من العمل فعليًا">🔧 صيانة</button>
 ${adminForce ? `<button class="btn" style="padding:5px 10px;font-size:0.78rem;" onclick="forceEmployeeState('${key}',null)">إلغاء الإجبار</button>` : ''}
 <div style="margin-top:6px;display:flex;align-items:center;gap:4px;" title="مدة الاستراحة بالدقائق لهذا الموظف">
