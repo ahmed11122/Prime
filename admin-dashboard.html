@@ -2923,11 +2923,15 @@ ${over ? `⚠️ تجاوز ${breakLimit} دقيقة — ` : ''}منذ ${mins} �
 </div>`;
 }
 
-const statusBadge = isWorking
-? '<span style="background:#dcfce7;color:#166534;padding:2px 10px;border-radius:20px;font-size:0.78rem;font-weight:700;">يعمل</span>'
+const statusBadge = adminForce === 'maintenance'
+? '<span style="background:#fecaca;color:#7f1d1d;padding:2px 10px;border-radius:20px;font-size:0.78rem;font-weight:700;">🔧 صيانة</span>'
+: isWorking
+? `<span style="background:#dcfce7;color:#166534;padding:2px 10px;border-radius:20px;font-size:0.78rem;font-weight:700;">يعمل — ${count} طلب</span>`
 : '<span style="background:#fef3c7;color:#92400e;padding:2px 10px;border-radius:20px;font-size:0.78rem;font-weight:700;">استراحة</span>';
 
-const forceBadge = adminForce
+const forceBadge = adminForce === 'maintenance'
+? '<div style="font-size:0.72rem;color:#dc2626;margin-top:2px;font-weight:800;">⚠️ الجهاز محدد كـ صيانة — تنبيه فقط، لا يمنع الموظف فعليًا</div>'
+: adminForce
 ? `<div style="font-size:0.72rem;color:#2563eb;margin-top:2px;">إجبار المشرف: ${adminForce === 'working' ? 'عمل' : 'استراحة'}</div>`
 : '';
 
@@ -2940,7 +2944,7 @@ const warnBadge = warnCount > 0
 
 return `
 <tr>
-<td style="font-weight:700">${name}${posLabel}</td>
+<td style="font-weight:700;cursor:pointer;color:var(--accent);" onclick="openSessionLog('${key}','${escapeHtml(name)}')" title="عرض سجل أوقات العمل والاستراحة">${name}${posLabel}</td>
 <td style="text-align:center"><span style="background:${count > 0 ? '#eff6ff' : '#f1f5f9'};color:${count > 0 ? '#2563eb' : '#94a3b8'};padding:2px 12px;border-radius:20px;font-weight:800;font-size:0.85rem;">${count}</span>${targetLabel}</td>
 <td>${statusBadge}${breakInfo}${forceBadge}</td>
 <td style="text-align:center">${warnBadge}</td>
@@ -2948,13 +2952,8 @@ return `
 <td>
 <button class="btn" style="padding:5px 10px;font-size:0.78rem;" onclick="forceEmployeeState('${key}','working')">إجبار عمل</button>
 <button class="btn" style="padding:5px 10px;font-size:0.78rem;" onclick="forceEmployeeState('${key}','break')">إجبار استراحة</button>
+<button class="btn" style="padding:5px 10px;font-size:0.78rem;background:${adminForce === 'maintenance' ? '#dc2626' : ''};color:${adminForce === 'maintenance' ? '#fff' : ''};" onclick="forceEmployeeState('${key}','maintenance')" title="علامة/تنبيه فقط — لا يمنع الموظف من العمل فعليًا">🔧 صيانة</button>
 ${adminForce ? `<button class="btn" style="padding:5px 10px;font-size:0.78rem;" onclick="forceEmployeeState('${key}',null)">إلغاء الإجبار</button>` : ''}
-<div style="margin-top:6px;display:flex;align-items:center;gap:4px;">
-<input id="qm-quota-input-${key}" type="number" min="0" placeholder="${target != null ? target : 'حصة'}"
-style="width:64px;padding:3px 6px;border-radius:6px;border:1px solid var(--border);font-size:0.78rem;">
-<button class="btn" style="padding:4px 8px;font-size:0.75rem;" onclick="setManualQuota('${key}')">تعيين</button>
-${isManual ? `<button class="btn" style="padding:4px 8px;font-size:0.75rem;" onclick="clearManualQuota('${key}')">تلقائي</button>` : ''}
-</div>
 <div style="margin-top:6px;display:flex;align-items:center;gap:4px;" title="مدة الاستراحة بالدقائق لهذا الموظف">
 <input id="qm-breaklimit-input-${key}" type="number" min="1" placeholder="${breakLimit}"
 style="width:64px;padding:3px 6px;border-radius:6px;border:1px solid var(--border);font-size:0.78rem;">
@@ -2985,24 +2984,64 @@ container.innerHTML = poolBanner + `
 </table>`;
 }
 
-function setManualQuota(employeeKey) {
-const input = document.getElementById('qm-quota-input-' + employeeKey);
-if (!input) return;
-const n = parseInt(input.value, 10);
-if (isNaN(n) || n < 0) { alert('أدخل رقمًا صحيحًا'); return; }
-queueMonitorRef().child(employeeKey).update({ targetAssign: n, manualTarget: true })
-.catch(err => alert('فشل تنفيذ الأمر: ' + err.message));
-}
-
-function clearManualQuota(employeeKey) {
-queueMonitorRef().child(employeeKey).update({ manualTarget: null })
-.catch(err => alert('فشل تنفيذ الأمر: ' + err.message));
-}
-
 // Per-employee break duration (minutes). Read by the extension via
 // GET /queuemonitor/state (breakLimitMinutes) and used instead of its
 // own 15-min default — lets a manager shorten/extend break time for a
 // specific person depending on current load.
+// ═══ Employee session log (work/break history) ═══
+// Reads queueSessions/{owner}/{employeeKey} — each child is one closed
+// session: { type: 'work'|'break', startedAt, endedAt }, written by the
+// relay when it receives a POST to /queuemonitor/session from the
+// extension's setWorking() transitions. Requires that relay-side handler
+// to exist (not part of this file) for any data to show up here.
+function queueSessionsRef(employeeKey) { return fbDB.ref('queueSessions/' + myWorkspaceOwner + '/' + employeeKey); }
+
+function formatSessionDuration(ms) {
+const totalMin = Math.max(0, Math.round(ms / 60000));
+const h = Math.floor(totalMin / 60), m = totalMin % 60;
+return h > 0 ? `${h} س ${m} د` : `${m} د`;
+}
+
+function openSessionLog(employeeKey, employeeName) {
+const overlay = document.getElementById('sessionLogModalOverlay');
+const title = document.getElementById('sessionLogModalTitle');
+const list = document.getElementById('sessionLogModalList');
+title.textContent = 'سجل أوقات العمل والاستراحة — ' + employeeName;
+list.innerHTML = '<div style="text-align:center;color:#94a3b8;padding:16px;">جارِ التحميل...</div>';
+overlay.style.display = 'flex';
+
+queueSessionsRef(employeeKey).limitToLast(100).once('value').then(snap => {
+const sessions = [];
+snap.forEach(child => { sessions.push(child.val() || {}); });
+sessions.sort((a, b) => (b.startedAt || 0) - (a.startedAt || 0));
+
+if (!sessions.length) {
+list.innerHTML = '<div style="text-align:center;color:#94a3b8;padding:16px;">لا يوجد سجل بعد لهذا الموظف</div>';
+return;
+}
+
+list.innerHTML = sessions.map(s => {
+const isWork = s.type === 'work';
+const start = s.startedAt ? new Date(s.startedAt).toLocaleString('ar-IQ') : '—';
+const end = s.endedAt ? new Date(s.endedAt).toLocaleTimeString('ar-IQ') : 'جارٍ الآن';
+const dur = s.endedAt && s.startedAt ? formatSessionDuration(s.endedAt - s.startedAt) : '—';
+return `<div style="padding:10px 12px;border-bottom:1px solid #f0f1f4;display:flex;justify-content:space-between;align-items:center;gap:10px;">
+<div style="font-size:0.82rem;line-height:1.6;">
+<span style="background:${isWork ? '#dcfce7' : '#fef3c7'};color:${isWork ? '#166534' : '#92400e'};padding:2px 10px;border-radius:20px;font-weight:700;font-size:0.78rem;">${isWork ? 'عمل' : 'استراحة'}</span>
+<div style="color:#4b5563;margin-top:4px;">${start} ← ${end}</div>
+</div>
+<div style="font-weight:800;color:#0f172a;white-space:nowrap;">${dur}</div>
+</div>`;
+}).join('');
+}).catch(err => {
+list.innerHTML = '<div style="text-align:center;color:#dc2626;padding:16px;">تعذر تحميل السجل: ' + escapeHtml(err.message) + '</div>';
+});
+}
+
+function closeSessionLog() {
+document.getElementById('sessionLogModalOverlay').style.display = 'none';
+}
+
 function setBreakLimit(employeeKey) {
 const input = document.getElementById('qm-breaklimit-input-' + employeeKey);
 if (!input) return;
@@ -3221,6 +3260,15 @@ function initCallAlertNotifications() {
   });
 }
 </script>
+<div id="sessionLogModalOverlay" style="display:none;position:fixed;inset:0;background:rgba(15,23,42,0.5);z-index:9999;align-items:center;justify-content:center;padding:16px">
+<div style="background:#fff;border-radius:12px;padding:20px;width:100%;max-width:420px;max-height:80vh;display:flex;flex-direction:column;gap:12px">
+<div id="sessionLogModalTitle" style="font-weight:800;font-size:0.95rem;color:var(--text-main)">سجل الموظف</div>
+<div id="sessionLogModalList" style="overflow-y:auto;max-height:400px"></div>
+<div style="display:flex;justify-content:flex-end;">
+<button onclick="closeSessionLog()" class="btn" style="padding:6px 14px;font-size:0.8rem">إغلاق</button>
+</div>
+</div>
+</div>
 <div id="deptModalOverlay" style="display:none;position:fixed;inset:0;background:rgba(15,23,42,0.5);z-index:9999;align-items:center;justify-content:center;padding:16px">
 <div style="background:#fff;border-radius:12px;padding:20px;width:100%;max-width:360px;max-height:80vh;display:flex;flex-direction:column;gap:12px">
 <div style="font-weight:800;font-size:0.95rem;color:var(--text-main)">أقسام الموظف</div>
