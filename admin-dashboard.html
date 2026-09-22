@@ -2871,6 +2871,11 @@ queueMonitorRef().on('value', snap => {
 const data = snap.val() || {};
 renderQueueMonitorTable(data);
 recomputeQueueAssignments(data);
+}, err => {
+_queueMonitorListenerAttached = false;
+const container = document.getElementById('queueMonitorList');
+if (container) container.innerHTML = `<div style="text-align:center;color:#dc2626;padding:16px;">تعذّر تحميل البيانات: ${err.message || err.code || 'خطأ صلاحيات'}<br><span style="font-size:0.8rem;color:#94a3b8;">تحقق من قواعد Firebase الخاصة بمسار queueMonitor</span></div>`;
+console.error('[queueMonitor] read failed:', err);
 });
 }
 
@@ -2914,6 +2919,7 @@ const targetLabel = (isWorking && target != null)
 ? `<div style="font-size:0.72rem;color:#0f172a;margin-top:2px;">الحصة الحالية: ${target}${isManual ? ' (يدوي)' : ''}</div>`
 : '';
 
+const breakLimit = (typeof emp.breakLimitMinutes === 'number') ? emp.breakLimitMinutes : 15;
 let breakInfo = '';
 if (!isWorking && emp.breakStartedAt) {
 const mins = Math.floor((Date.now() - emp.breakStartedAt) / 60000);
@@ -2935,7 +2941,6 @@ const forceBadge = adminForce === 'maintenance'
 ? `<div style="font-size:0.72rem;color:#2563eb;margin-top:2px;">إجبار المشرف: ${adminForce === 'working' ? 'عمل' : 'استراحة'}</div>`
 : '';
 
-const breakLimit = (typeof emp.breakLimitMinutes === 'number') ? emp.breakLimitMinutes : 15;
 const warnCount = (typeof emp.warningsToday === 'number' && emp.warningsDate === todayDateKey()) ? emp.warningsToday : 0;
 const overEval = warnCount > 3;
 const warnBadge = warnCount > 0
