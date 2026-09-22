@@ -2964,6 +2964,7 @@ return `
 <button class="btn" style="padding:5px 10px;font-size:0.78rem;background:${adminForce === 'ended' ? '#475569' : ''};color:${adminForce === 'ended' ? '#fff' : ''};" onclick="if(confirm('إنهاء الدوام لهذا الموظف؟ لن يتمكن من العودة للعمل حتى تُلغي الإجبار.')) forceEmployeeState('${key}','ended')" title="يوقفه عن العمل ويمنعه من الضغط على بدء العمل حتى تُلغي الإجبار">⏹️ إنهاء الدوام</button>
 <button class="btn" style="padding:5px 10px;font-size:0.78rem;background:${adminForce === 'maintenance' ? '#dc2626' : ''};color:${adminForce === 'maintenance' ? '#fff' : ''};" onclick="forceEmployeeState('${key}','maintenance')" title="علامة/تنبيه فقط — لا يمنع الموظف من العمل فعليًا">🔧 صيانة</button>
 ${adminForce ? `<button class="btn" style="padding:5px 10px;font-size:0.78rem;" onclick="forceEmployeeState('${key}',null)">إلغاء الإجبار</button>` : ''}
+${warnCount > 0 ? `<button class="btn" style="padding:5px 10px;font-size:0.78rem;" onclick="resetEmployeeWarnings('${key}')" title="تصفير تحذيرات اليوم">🧹 تصفير التحذيرات</button>` : ''}
 <div style="margin-top:6px;display:flex;align-items:center;gap:4px;" title="مدة الاستراحة بالدقائق لهذا الموظف">
 <input id="qm-breaklimit-input-${key}" type="number" min="1" placeholder="${breakLimit}"
 style="width:64px;padding:3px 6px;border-radius:6px;border:1px solid var(--border);font-size:0.78rem;">
@@ -3059,6 +3060,21 @@ const n = parseInt(input.value, 10);
 if (isNaN(n) || n <= 0) { alert('أدخل عدد دقائق صحيح'); return; }
 queueMonitorRef().child(employeeKey).update({ breakLimitMinutes: n })
 .then(() => { input.value = ''; })
+.catch(err => alert('فشل تنفيذ الأمر: ' + err.message));
+}
+
+// Resets today's break-overrun warning count for one employee back to 0.
+// NOT a direct write to warningsToday — the extension re-reports its own
+// local warningsToday.count every LIVE_REPORT_MS (20s) regardless, which
+// would silently clobber a direct write right back to the old value. So
+// this instead sets a timestamp the extension polls for (same pattern as
+// adminForce/breakLimitMinutes/popup) — see /queuemonitor/state in
+// relay.js and pollAdminForce() in content-queuemonitor.js — and the
+// extension clears its own local count once it picks that up (within
+// ADMIN_POLL_MS, ~5s).
+function resetEmployeeWarnings(employeeKey) {
+if (!confirm('تصفير تحذيرات اليوم لهذا الموظف؟')) return;
+queueMonitorRef().child(employeeKey).update({ resetWarningsAt: Date.now() })
 .catch(err => alert('فشل تنفيذ الأمر: ' + err.message));
 }
 
