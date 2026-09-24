@@ -665,9 +665,17 @@ tr:hover td { background: #fafafa; }
 <div class="card-title">متابعة الطلبات المباشرة</div>
 <div class="card-subtitle">عدد الطلبات (تحت التدقيق) لكل موظف لحظيًا، وحالة العمل/الاستراحة، وتحذيرات تجاوز وقت الاستراحة اليوم (أكثر من 3 = تنزيل تقييم)، مع إمكانية التحكم يدويًا من هنا.</div>
 </div>
+<div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:12px;">
+<button class="btn" id="qmViewBtn-live" onclick="qmSetView('live')">🔴 مباشر</button>
+<button class="btn" id="qmViewBtn-perf" onclick="qmSetView('perf')">📊 أداء الدورات (x ← 0)</button>
+<select id="qmShiftSel" onchange="qmRefresh()" style="padding:6px;border-radius:8px;border:1px solid var(--border);"><option value="all">كل الدوامات</option></select>
+<input id="qmNameFilter" type="text" placeholder="🔍 اسم الموظف" oninput="qmRefresh()" style="padding:6px 10px;border-radius:8px;border:1px solid var(--border);width:140px;">
+<span id="qmDateBox" style="display:none;align-items:center;gap:6px;font-size:0.82rem;">من <input type="date" id="qmFrom" onchange="qmRefresh()"> إلى <input type="date" id="qmTo" onchange="qmRefresh()"> <button class="btn" style="padding:4px 10px;" onclick="qm.cache=null;qmRefresh()">🔄</button></span>
+</div>
 <div id="queueMonitorList">
 <div style="text-align:center;color:#94a3b8;padding:16px;">جارِ التحميل...</div>
 </div>
+<div id="qmPerfWrap" style="display:none"></div>
 </div>
 </div>
 
@@ -1072,7 +1080,7 @@ action, details: details || '', by: myDisplayName || 'مجهول', ts: Date.now(
 
 function escapeHtml(str) {
 return String(str == null ? '' : str)
-.replace(/&/g, '&').replace(/</g, '<').replace(/>/g, '>').replace(/"/g, '"');
+.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 }
 
 const ALL_TAB_IDS = ['morning','evening','perf','schedule','active','leaves'];
@@ -1099,7 +1107,7 @@ if (name === 'badala') loadBadalaSection();
 if (name === 'aiknowledge') loadAiKnowledgeSection();
 if (name === 'callalerts') loadCallAlerts();
 if (name === 'extensionperms') loadExtensionPermissions();
-if (name === 'queuemonitor') loadQueueMonitor();
+if (name === 'queuemonitor') { loadQueueMonitor(); qmSetView(qm.view); }
 }
 
 function renderAdminDashboard() {
@@ -2886,9 +2894,112 @@ console.error('[queueMonitor] read failed:', err);
 });
 }
 
+// ═══ Queue monitor: filters + x→0 run performance ═══
+// Data: queueRuns/{owner}/{YYYY-MM-DD}/{employeeKey}/{startedAt} written by relay.js (see saveRunRecord).
+const qm = { view: 'live', cache: null, shifts: new Set() };
+function qmToday() { return new Date(Date.now() + 3 * 3600e3).toISOString().slice(0, 10); } // Baghdad, same as relay
+function qmDur(ms) {
+  const s = Math.max(0, Math.round(ms / 1000));
+  if (s < 60) return s + ' ث';
+  const m = Math.floor(s / 60), r = s % 60;
+  return m < 60 ? `${m} د${r ? ' ' + r + ' ث' : ''}` : `${Math.floor(m / 60)} س ${m % 60} د`;
+}
+function qmPass(shift, name) {
+  const sel = document.getElementById('qmShiftSel').value;
+  const q = document.getElementById('qmNameFilter').value.trim();
+  return (sel === 'all' || sel === (shift || 'none')) && (!q || String(name || '').includes(q));
+}
+function qmFillShifts(list) {
+  list.forEach(x => qm.shifts.add(x));
+  const sel = document.getElementById('qmShiftSel'), arr = [...qm.shifts].sort(), sig = arr.join('|');
+  if (sel.dataset.sig === sig) return;
+  const cur = sel.value; sel.dataset.sig = sig;
+  sel.innerHTML = '<option value="all">كل الدوامات</option>' + arr.map(x => `<option value="${escapeHtml(x)}">${x === 'none' ? 'بدون دوام' : '🕒 ' + escapeHtml(x)}</option>`).join('');
+  sel.value = arr.includes(cur) ? cur : 'all';
+}
+function qmSetView(v) {
+  qm.view = v;
+  document.getElementById('queueMonitorList').style.display = v === 'live' ? '' : 'none';
+  document.getElementById('qmPerfWrap').style.display = v === 'perf' ? '' : 'none';
+  document.getElementById('qmDateBox').style.display = v === 'perf' ? 'flex' : 'none';
+  ['live', 'perf'].forEach(x => {
+    const b = document.getElementById('qmViewBtn-' + x);
+    b.style.background = x === v ? 'var(--accent)' : ''; b.style.color = x === v ? '#fff' : '';
+  });
+  qmRefresh();
+}
+function qmRefresh() {
+  if (qm.view === 'live') { if (window._qmData) renderQueueMonitorTable(window._qmData); }
+  else loadQmPerf();
+}
+function qmRunLabel(emp, count) {
+  let h = '';
+  const r = emp.run, l = emp.lastRun;
+  if (r && r.startedAt) h += `<div style="font-size:0.72rem;color:#2563eb;margin-top:2px;">🔄 ${r.startCount}${r.taken > r.startCount ? '+' : ''} ← ${count} منذ ${qmDur(Date.now() - r.startedAt)}${r.partial ? ' ~' : ''}</div>`;
+  if (l) h += `<div style="font-size:0.72rem;color:${l.status === 'completed' ? '#166534' : '#b45309'};margin-top:2px;">${l.status === 'completed' ? '✅ آخر دورة: ' + l.taken + ' ← 0 خلال ' + qmDur(l.durationMs) : '⚠️ دورة لم تكتمل'}</div>`;
+  return h;
+}
+async function loadQmPerf() {
+  const wrap = document.getElementById('qmPerfWrap');
+  const fe = document.getElementById('qmFrom'), te = document.getElementById('qmTo');
+  if (!fe.value) fe.value = qmToday();
+  if (!te.value) te.value = fe.value;
+  let from = fe.value, to = te.value; if (from > to) [from, to] = [to, from];
+  const days = [];
+  for (let t = Date.parse(from + 'T00:00:00Z'), e = Date.parse(to + 'T00:00:00Z'); t <= e && days.length < 31; t += 864e5) days.push(new Date(t).toISOString().slice(0, 10));
+  const ck = days[0] + '_' + days.length;
+  if (!qm.cache || qm.cache.key !== ck) {
+    wrap.innerHTML = '<div style="text-align:center;color:#94a3b8;padding:16px;">جارِ التحميل...</div>';
+    try {
+      const snaps = await Promise.all(days.map(d => fbDB.ref('queueRuns/' + myWorkspaceOwner + '/' + d).once('value')));
+      const runs = [];
+      snaps.forEach(sn => { sn.forEach(emp => { emp.forEach(r => { runs.push({ ...r.val(), key: emp.key }); }); }); });
+      qm.cache = { key: ck, runs };
+    } catch (err) {
+      wrap.innerHTML = `<div style="text-align:center;color:#dc2626;padding:16px;">تعذّر التحميل: ${escapeHtml(err.message || err.code)}<br><span style="font-size:0.8rem;color:#94a3b8;">تأكد من صلاحية القراءة على queueRuns في قواعد Firebase</span></div>`;
+      return;
+    }
+  }
+  qmFillShifts(qm.cache.runs.map(r => r.shift || 'none'));
+  const runs = qm.cache.runs.filter(r => qmPass(r.shift, r.name)).sort((a, b) => b.startedAt - a.startedAt);
+  if (!runs.length) { wrap.innerHTML = '<div style="text-align:center;color:#94a3b8;padding:16px;">لا توجد دورات في هذه الفترة.</div>'; return; }
+  const eff = r => Math.max(0, (r.durationMs || 0) - (r.breakMs || 0)); // net of استراحة
+  const by = {};
+  runs.forEach(r => {
+    const a = by[r.key] || (by[r.key] = { name: r.name || r.key, n: 0, taken: 0, ok: [], bad: 0 });
+    a.n++; a.taken += r.taken || 0;
+    if (r.status === 'completed' && !r.partial) a.ok.push(r); else a.bad++;
+  });
+  const th = 'padding:8px;text-align:center', td = 'padding:6px;text-align:center';
+  const sum = Object.values(by).sort((a, b) => b.taken - a.taken).map(a => {
+    const t = a.ok.reduce((x, r) => x + eff(r), 0), o = a.ok.reduce((x, r) => x + (r.taken || 0), 0), e = a.ok.map(eff);
+    return `<tr><td style="font-weight:700;padding:6px;">${escapeHtml(a.name)}</td><td style="${td}">${a.n}</td><td style="${td}">${a.taken}</td>
+<td style="${td}">${a.ok.length ? qmDur(t / a.ok.length) : '—'}</td><td style="${td}">${o ? qmDur(t / o) : '—'}</td>
+<td style="${td}">${e.length ? qmDur(Math.min(...e)) : '—'}</td><td style="${td}">${e.length ? qmDur(Math.max(...e)) : '—'}</td>
+<td style="${td};color:${a.bad ? '#b45309' : '#94a3b8'}">${a.bad || '—'}</td></tr>`;
+  }).join('');
+  const log = runs.slice(0, 300).map(r => {
+    const st = r.status === 'completed' ? '✅' : `⚠️ متبقي ${r.remaining || 0}`;
+    return `<tr><td style="${td}">${r.dateKey || ''}</td><td style="font-weight:700;padding:6px;">${escapeHtml(r.name || r.key)}</td>
+<td style="${td};font-size:0.78rem;">${r.shift ? escapeHtml(r.shift) : '—'}</td>
+<td style="${td}">${new Date(r.startedAt).toLocaleTimeString('ar-IQ', { hour: '2-digit', minute: '2-digit' })}</td>
+<td style="${td}"><b>${r.startCount}</b>${r.taken > r.startCount ? ' (+' + (r.taken - r.startCount) + ')' : ''} ← 0</td>
+<td style="${td}">${qmDur(r.durationMs || 0)}</td><td style="${td};color:#94a3b8;">${r.breakMs ? qmDur(r.breakMs) : '—'}</td>
+<td style="${td}" title="${r.partial ? 'بداية الدورة غير مرصودة بدقة — لا تدخل في المتوسطات' : ''}">${st}${r.partial ? ' ~' : ''}</td></tr>`;
+  }).join('');
+  const hd = 'text-align:right;color:#64748b;font-size:0.8rem;';
+  wrap.innerHTML = `<div style="font-weight:800;margin:6px 0;">ملخص الأداء</div>
+<div style="overflow-x:auto"><table class="table" style="width:100%;border-collapse:collapse;"><thead><tr style="${hd}"><th style="padding:8px">الموظف</th><th style="${th}">دورات</th><th style="${th}">طلبات</th><th style="${th}">متوسط الدورة</th><th style="${th}">متوسط/طلب</th><th style="${th}">أسرع</th><th style="${th}">أبطأ</th><th style="${th}">غير مكتملة</th></tr></thead><tbody>${sum}</tbody></table></div>
+<div style="font-size:0.72rem;color:#94a3b8;margin:4px 0 14px;">المتوسطات للدورات المكتملة فقط، بعد خصم وقت الاستراحة، وبدون الدورات التي لم تُرصد بدايتها (~).</div>
+<div style="font-weight:800;margin:6px 0;">سجل الدورات</div>
+<div style="overflow-x:auto"><table class="table" style="width:100%;border-collapse:collapse;"><thead><tr style="${hd}"><th style="${th}">التاريخ</th><th style="padding:8px">الموظف</th><th style="${th}">الدوام</th><th style="${th}">بدأ</th><th style="${th}">الدورة</th><th style="${th}">المدة</th><th style="${th}">استراحة</th><th style="${th}">الحالة</th></tr></thead><tbody>${log}</tbody></table></div>`;
+}
+
 function renderQueueMonitorTable(data) {
 const container = document.getElementById('queueMonitorList');
 if (!container) return;
+window._qmData = data;
+qmFillShifts(Object.keys(data).filter(k => k !== '_pool').map(k => (data[k] && data[k].shiftStart && data[k].shiftEnd) ? data[k].shiftStart + '-' + data[k].shiftEnd : 'none'));
 
 // Bug fix: this is called from a listener on the WHOLE queueMonitor/{owner}
 // node (see loadQueueMonitor above), so it re-runs on any change to ANY
@@ -2912,7 +3023,7 @@ const activeEl = document.activeElement;
 const activeElId = (activeEl && typeof activeEl.id === 'string' && activeEl.id.indexOf('qm-') === 0) ? activeEl.id : null;
 const activeElSelectionStart = (activeElId && typeof activeEl.selectionStart === 'number') ? activeEl.selectionStart : null;
 
-const keys = Object.keys(data).filter(k => k !== '_pool');
+const keys = Object.keys(data).filter(k => k !== '_pool' && qmPass((data[k] && data[k].shiftStart && data[k].shiftEnd) ? data[k].shiftStart + '-' + data[k].shiftEnd : 'none', data[k] && data[k].name || k));
 const poolCount = (data._pool && typeof data._pool.count === 'number') ? data._pool.count : 0;
 
 const poolBanner = `<div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;background:var(--bg-main);border:1px solid var(--border);border-radius:8px;padding:10px 14px;">
@@ -2994,8 +3105,8 @@ const warnBadge = warnCount > 0
 
 return `
 <tr>
-<td style="font-weight:700;cursor:pointer;color:var(--accent);" onclick="openSessionLog('${key}','${escapeHtml(name)}')" title="عرض سجل أوقات العمل والاستراحة">${name}${posLabel}</td>
-<td style="text-align:center"><span style="background:${count > 0 ? '#eff6ff' : '#f1f5f9'};color:${count > 0 ? '#2563eb' : '#94a3b8'};padding:2px 12px;border-radius:20px;font-weight:800;font-size:0.85rem;">${count}</span>${targetLabel}</td>
+<td style="font-weight:700;cursor:pointer;color:var(--accent);" data-k="${escapeHtml(key)}" data-n="${escapeHtml(name)}" onclick="openSessionLog(this.dataset.k,this.dataset.n)" title="عرض سجل أوقات العمل والاستراحة">${escapeHtml(name)}${posLabel}</td>
+<td style="text-align:center"><span style="background:${count > 0 ? '#eff6ff' : '#f1f5f9'};color:${count > 0 ? '#2563eb' : '#94a3b8'};padding:2px 12px;border-radius:20px;font-weight:800;font-size:0.85rem;">${count}</span>${targetLabel}${qmRunLabel(emp, count)}</td>
 <td>${statusBadge}${breakInfo}${forceBadge}${shiftLabel}${overtimeLabel}</td>
 <td style="text-align:center">${warnBadge}</td>
 <td style="color:#64748b;font-size:0.82rem;">${lastUpdate}</td>
