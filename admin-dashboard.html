@@ -2861,7 +2861,7 @@ function recomputeQueueAssignments(data) {
 if (!data) return;
 const poolCount = (data._pool && typeof data._pool.count === 'number') ? data._pool.count : 0;
 const workingKeys = Object.keys(data)
-.filter(k => k !== '_pool' && data[k] && data[k].working === true && !data[k].manualTarget)
+.filter(k => k !== '_pool' && data[k] && data[k].working === true && !data[k].manualTarget && !qmOffShift(data[k]))
 // FIFO order: whoever pressed بدء العمل first gets served first when there isn't enough for everyone
 .sort((a, b) => (data[a].queueJoinedAt || 0) - (data[b].queueJoinedAt || 0));
 
@@ -2903,6 +2903,14 @@ function qmDur(ms) {
   if (s < 60) return s + ' ث';
   const m = Math.floor(s / 60), r = s % 60;
   return m < 60 ? `${m} د${r ? ' ' + r + ' ث' : ''}` : `${Math.floor(m / 60)} س ${m % 60} د`;
+}
+// true when the employee has a shift window set and Baghdad time (same basis as relay) is outside it
+function qmOffShift(emp) {
+  const p = t => { const m = /^(\d\d):(\d\d)$/.exec(t || ''); return m ? +m[1] * 60 + +m[2] : null; };
+  const a = p(emp && emp.shiftStart), b = p(emp && emp.shiftEnd);
+  if (a === null || b === null || a === b) return false;
+  const d = new Date(Date.now() + 3 * 3600e3), n = d.getUTCHours() * 60 + d.getUTCMinutes();
+  return a < b ? !(n >= a && n < b) : !(n >= a || n < b);
 }
 function qmPass(shift, name) {
   const sel = document.getElementById('qmShiftSel').value;
@@ -3050,13 +3058,14 @@ const name = emp.name || key;
 const count = (typeof emp.queueCount === 'number') ? emp.queueCount : 0;
 const isWorking = !!emp.working;
 const adminForce = emp.adminForce || null;
+const off = qmOffShift(emp);
 const target = (typeof emp.targetAssign === 'number') ? emp.targetAssign : null;
 const isManual = !!emp.manualTarget;
 const lastUpdate = emp.lastUpdate ? new Date(emp.lastUpdate).toLocaleTimeString('ar-IQ') : '—';
 
-if (isWorking) queuePosition++;
-const posLabel = isWorking ? `<div style="font-size:0.72rem;color:#2563eb;margin-top:2px;">الدور: ${queuePosition}</div>` : '';
-const targetLabel = (isWorking && target != null)
+if (isWorking && !off) queuePosition++;
+const posLabel = (isWorking && !off) ? `<div style="font-size:0.72rem;color:#2563eb;margin-top:2px;">الدور: ${queuePosition}</div>` : '';
+const targetLabel = (isWorking && !off && target != null)
 ? `<div style="font-size:0.72rem;color:#0f172a;margin-top:2px;">الحصة الحالية: ${target}${isManual ? ' (يدوي)' : ''}</div>`
 : '';
 
@@ -3064,7 +3073,7 @@ const breakLimit = (typeof emp.breakLimitMinutes === 'number') ? emp.breakLimitM
 let breakInfo = '';
 if (!isWorking && emp.breakStartedAt) {
 const mins = Math.floor((Date.now() - emp.breakStartedAt) / 60000);
-const over = mins >= breakLimit;
+const over = mins >= breakLimit && !off;
 breakInfo = `<div style="font-size:0.75rem;margin-top:2px;color:${over ? '#dc2626' : '#64748b'};font-weight:${over ? '800' : '400'}">
 ${over ? `⚠️ تجاوز ${breakLimit} دقيقة — ` : ''}منذ ${mins} دقيقة <span style="color:#94a3b8;">(الحد: ${breakLimit}د)</span>
 </div>`;
@@ -3085,6 +3094,10 @@ const statusBadge = adminForce === 'ended'
 ? '<span style="background:#e2e8f0;color:#334155;padding:2px 10px;border-radius:20px;font-size:0.78rem;font-weight:700;">⏹️ انتهى الدوام</span>'
 : adminForce === 'maintenance'
 ? '<span style="background:#fecaca;color:#7f1d1d;padding:2px 10px;border-radius:20px;font-size:0.78rem;font-weight:700;">🔧 صيانة</span>'
+: (isWorking && off)
+? (count > 0
+? `<span style="background:#ede9fe;color:#5b21b6;padding:2px 10px;border-radius:20px;font-size:0.78rem;font-weight:700;">🌙 إضافي — ${count} طلب</span>`
+: '<span style="background:#e2e8f0;color:#334155;padding:2px 10px;border-radius:20px;font-size:0.78rem;font-weight:700;">⏹️ خارج الدوام — بلا طلبات</span>')
 : isWorking
 ? `<span style="background:#dcfce7;color:#166534;padding:2px 10px;border-radius:20px;font-size:0.78rem;font-weight:700;">يعمل — ${count} طلب</span>`
 : '<span style="background:#fef3c7;color:#92400e;padding:2px 10px;border-radius:20px;font-size:0.78rem;font-weight:700;">استراحة</span>';
