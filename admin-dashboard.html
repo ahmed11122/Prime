@@ -2962,7 +2962,20 @@ async function loadQmPerf() {
       const snaps = await Promise.all(days.map(d => fbDB.ref('queueRuns/' + myWorkspaceOwner + '/' + d).once('value')));
       const runs = [];
       snaps.forEach(sn => { sn.forEach(emp => { emp.forEach(r => { runs.push({ ...r.val(), key: emp.key }); }); }); });
-      qm.cache = { key: ck, runs };
+      // Safety net for records written before the relay's per-employee lock fix:
+      // two tabs of the same employee could each log the same real batch as its
+      // own run a few seconds/minutes apart (identical startCount, close start
+      // times). Collapse those into one before computing averages.
+      runs.sort((a, b) => a.key === b.key ? a.startedAt - b.startedAt : (a.key < b.key ? -1 : 1));
+      const deduped = [];
+      for (const r of runs) {
+        const p = deduped[deduped.length - 1];
+        const dup = p && p.key === r.key && p.startCount === r.startCount &&
+          Math.abs(r.startedAt - p.startedAt) < 5 * 60 * 1000;
+        if (dup) { if (r.startedAt < p.startedAt) deduped[deduped.length - 1] = r; }
+        else deduped.push(r);
+      }
+      qm.cache = { key: ck, runs: deduped };
     } catch (err) {
       wrap.innerHTML = `<div style="text-align:center;color:#dc2626;padding:16px;">تعذّر التحميل: ${escapeHtml(err.message || err.code)}<br><span style="font-size:0.8rem;color:#94a3b8;">تأكد من صلاحية القراءة على queueRuns في قواعد Firebase</span></div>`;
       return;
