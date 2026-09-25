@@ -1186,7 +1186,7 @@ const permsHTML = p.isAdmin ? '' : `
 <option value="employee" ${sys.tickets==='employee'?'selected':''}>التذاكر: موظف (قسمه فقط)</option>
 <option value="manager" ${sys.tickets==='manager'?'selected':''}>التذاكر: مدير (كل الأقسام)</option>
 </select>
-<select onchange="setMemberTeam('${uid}', this.value)" style="padding:4px;font-size:0.74rem;" title="نظام ادارة الفريق — رئيس فريق: يدير موظفيه، إنذارات، متابعة الطلبات. موظف: يسجّل الطلبات التي عالجها">
+<select onchange="setMemberTeam('${uid}', this.value)" style="padding:4px;font-size:0.74rem;" title="نظام ادارة الفريق — رئيس فريق: يدير موظفيه، تحذيرات، متابعة الطلبات. موظف: يسجّل الطلبات التي عالجها">
 <option value="none" ${sys.team==='none'?'selected':''}>الفريق: بدون</option>
 <option value="employee" ${sys.team==='employee'?'selected':''}>الفريق: موظف</option>
 <option value="leader" ${sys.team==='leader'?'selected':''}>الفريق: رئيس فريق</option>
@@ -2843,6 +2843,39 @@ function sanitizeNameKey(name) {
 // }
 function queueMonitorRef() { return fbDB.ref('queueMonitor/' + myWorkspaceOwner); }
 
+// Cache of every employee's logged manual-warning reasons, keyed by
+// employeeKey -> array of {text, createdAt}. Populated by a realtime
+// listener on the whole manualWarnings/{owner} tree so the hover tooltip
+// on the "تحذيرات" badge can list every reason without a per-row fetch.
+// These never expire/reset on their own — only resetManualWarnings() clears
+// the visible count, and the detailed log (this cache's source) is kept.
+let _manualWarningsCache = {};
+let _manualWarningsListenerAttached = false;
+function loadManualWarningsCache() {
+if (_manualWarningsListenerAttached) return;
+_manualWarningsListenerAttached = true;
+fbDB.ref('manualWarnings/' + myWorkspaceOwner).on('value', snap => {
+const data = snap.val() || {};
+const next = {};
+Object.keys(data).forEach(key => {
+next[key] = Object.values(data[key] || {})
+.filter(w => w && w.text)
+.sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
+});
+_manualWarningsCache = next;
+if (_lastQueueMonitorData) renderQueueMonitorTable(_lastQueueMonitorData);
+}, err => console.error('[manualWarnings] read failed:', err));
+}
+
+// Builds a hover tooltip listing every logged reason for an employee's
+// manual تحذيرات, most recent last, numbered if there's more than one.
+function manualWarningsTooltip(employeeKey) {
+const list = _manualWarningsCache[employeeKey] || [];
+if (!list.length) return 'تحذيرات يدوية — لا يوجد سبب مسجل';
+if (list.length === 1) return 'السبب: ' + list[0].text;
+return list.map((w, i) => `${i + 1}. ${w.text}`).join('\n');
+}
+
 // Must match todayKey() in content-queuemonitor.js exactly, so a warning
 // reported today doesn't silently show as stale/expired here.
 function todayDateKey() {
@@ -2850,6 +2883,7 @@ const d = new Date();
 return `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`;
 }
 let _queueMonitorListenerAttached = false;
+let _lastQueueMonitorData = null;
 
 // Fair-share batching:
 // perEmployee = min(30, floor(poolCount / numWorkingEmployees))
@@ -2880,10 +2914,12 @@ queueMonitorRef().child(key).update({ targetAssign: perEmployee }).catch(() => {
 
 function loadQueueMonitor() {
 if (!canUseAdminDashboard()) return;
+loadManualWarningsCache();
 if (_queueMonitorListenerAttached) return; // realtime listener already running, just re-render on tab switch
 _queueMonitorListenerAttached = true;
 queueMonitorRef().on('value', snap => {
 const data = snap.val() || {};
+_lastQueueMonitorData = data;
 renderQueueMonitorTable(data);
 recomputeQueueAssignments(data);
 }, err => {
@@ -3135,7 +3171,7 @@ const warnBadge = warnCount > 0
 // manualWarningCount, incremented via a transaction from addEmployeeWarning().
 const manualCount = (typeof emp.manualWarningCount === 'number') ? emp.manualWarningCount : 0;
 const manualBadge = manualCount > 0
-? `<span style="background:#fef3c7;color:#92400e;padding:2px 12px;border-radius:20px;font-weight:800;font-size:0.85rem;">📌 ${manualCount}</span>`
+? `<span title="${escapeHtml(manualWarningsTooltip(key))}" style="background:#fef3c7;color:#92400e;padding:2px 12px;border-radius:20px;font-weight:800;font-size:0.85rem;cursor:help;">📌 ${manualCount}</span>`
 : '<span style="color:#94a3b8;font-size:0.85rem;">—</span>';
 
 return `
@@ -3171,11 +3207,11 @@ style="padding:3px 6px;border-radius:6px;border:1px solid var(--border);font-siz
 style="width:120px;padding:3px 6px;border-radius:6px;border:1px solid var(--border);font-size:0.78rem;">
 <button class="btn" style="padding:4px 8px;font-size:0.75rem;" onclick="sendEmployeePopup('${key}')">📢 إرسال</button>
 </div>
-<div style="margin-top:6px;display:flex;align-items:center;gap:4px;" title="إضافة إنذار يدوي لهذا الموظف — منفصل عن تحذيرات تجاوز الاستراحة التلقائية">
-<input id="qm-warning-input-${key}" type="text" placeholder="سبب الإنذار (اختياري)..."
+<div style="margin-top:6px;display:flex;align-items:center;gap:4px;" title="إضافة تحذير يدوي لهذا الموظف — منفصل عن تحذيرات تجاوز الاستراحة التلقائية، ولا يُصفّر تلقائيًا">
+<input id="qm-warning-input-${key}" type="text" placeholder="سبب التحذير (اختياري)..."
 style="width:120px;padding:3px 6px;border-radius:6px;border:1px solid var(--border);font-size:0.78rem;">
-<button class="btn" style="padding:4px 8px;font-size:0.75rem;background:#fef3c7;color:#92400e;" onclick="addEmployeeWarning('${key}')">📌 إضافة إنذار</button>
-${manualCount > 0 ? `<button class="btn" style="padding:4px 8px;font-size:0.75rem;" onclick="resetManualWarnings('${key}')" title="تصفير الإنذارات اليدوية">🧹</button>` : ''}
+<button class="btn" style="padding:4px 8px;font-size:0.75rem;background:#fef3c7;color:#92400e;" onclick="addEmployeeWarning('${key}')">📌 إضافة تحذير</button>
+${manualCount > 0 ? `<button class="btn" style="padding:4px 8px;font-size:0.75rem;" onclick="resetManualWarnings('${key}')" title="تصفير التحذيرات اليدوية">🧹</button>` : ''}
 </div>
 </td>
 </tr>`;
@@ -3189,7 +3225,7 @@ container.innerHTML = poolBanner + `
 <th style="padding:8px;text-align:center">طلبات تحت التدقيق</th>
 <th style="padding:8px">الحالة</th>
 <th style="padding:8px;text-align:center">تحذيرات اليوم</th>
-<th style="padding:8px;text-align:center">إنذارات يدوية</th>
+<th style="padding:8px;text-align:center">تحذيرات يدوية</th>
 <th style="padding:8px">آخر تحديث</th>
 <th style="padding:8px">تحكم يدوي</th>
 </tr>
@@ -3323,7 +3359,7 @@ queueMonitorRef().child(employeeKey).update({ resetWarningsAt: Date.now() })
 .catch(err => alert('فشل تنفيذ الأمر: ' + err.message));
 }
 
-// Manual admin-issued warning ("إنذار") for a single employee — distinct
+// Manual admin-issued warning ("تحذير") for a single employee — distinct
 // from the automatic break-overrun warningsToday counter above, which the
 // extension owns and periodically overwrites. manualWarningCount lives on
 // its own field and is only ever touched from here, via a transaction so
@@ -3335,7 +3371,7 @@ function manualWarningsRef(employeeKey) { return fbDB.ref('manualWarnings/' + my
 function addEmployeeWarning(employeeKey) {
 const input = document.getElementById('qm-warning-input-' + employeeKey);
 const reason = input ? (input.value || '').trim() : '';
-if (!confirm('إضافة إنذار لهذا الموظف؟' + (reason ? ('\n\nالسبب: ' + reason) : ''))) return;
+if (!confirm('إضافة تحذير لهذا الموظف؟' + (reason ? ('\n\nالسبب: ' + reason) : ''))) return;
 queueMonitorRef().child(employeeKey).child('manualWarningCount').transaction(current => (current || 0) + 1)
 .then(() => manualWarningsRef(employeeKey).push({
 text: reason || null,
@@ -3343,11 +3379,11 @@ createdAt: Date.now(),
 addedBy: (fbAuth.currentUser && fbAuth.currentUser.email) || null
 }))
 .then(() => { if (input) input.value = ''; })
-.catch(err => alert('فشل إضافة الإنذار: ' + err.message));
+.catch(err => alert('فشل إضافة التحذير: ' + err.message));
 }
 
 function resetManualWarnings(employeeKey) {
-if (!confirm('تصفير الإنذارات اليدوية لهذا الموظف؟ (السجل التفصيلي يبقى محفوظًا)')) return;
+if (!confirm('تصفير التحذيرات اليدوية لهذا الموظف؟ (السجل التفصيلي يبقى محفوظًا)')) return;
 queueMonitorRef().child(employeeKey).child('manualWarningCount').set(0)
 .catch(err => alert('فشل تنفيذ الأمر: ' + err.message));
 }
