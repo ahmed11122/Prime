@@ -1186,7 +1186,7 @@ const permsHTML = p.isAdmin ? '' : `
 <option value="employee" ${sys.tickets==='employee'?'selected':''}>التذاكر: موظف (قسمه فقط)</option>
 <option value="manager" ${sys.tickets==='manager'?'selected':''}>التذاكر: مدير (كل الأقسام)</option>
 </select>
-<select onchange="setMemberTeam('${uid}', this.value)" style="padding:4px;font-size:0.74rem;" title="نظام ادارة الفريق — رئيس فريق: يدير موظفيه، تحذيرات، متابعة الطلبات. موظف: يسجّل الطلبات التي عالجها">
+<select onchange="setMemberTeam('${uid}', this.value)" style="padding:4px;font-size:0.74rem;" title="نظام ادارة الفريق — رئيس فريق: يدير موظفيه، إنذارات، متابعة الطلبات. موظف: يسجّل الطلبات التي عالجها">
 <option value="none" ${sys.team==='none'?'selected':''}>الفريق: بدون</option>
 <option value="employee" ${sys.team==='employee'?'selected':''}>الفريق: موظف</option>
 <option value="leader" ${sys.team==='leader'?'selected':''}>الفريق: رئيس فريق</option>
@@ -2829,8 +2829,14 @@ function sanitizeNameKey(name) {
 //   lastUpdate: <server timestamp>,
 //   breakStartedAt: <timestamp or null>,  // set when working=false
 //   adminForce: "working" | "break" | null // admin override written from this panel; extension must read + obey this
-//   warningsToday: 2,            // # of break-overrun warnings today (resets daily on the extension side)
+//   warningsToday: 2,            // # of break-overrun warnings today (resets daily on the extension side) —
+//                                 // only used to drive the "> 3 today = تنزيل تقييم" flag now
 //   warningsDate: "2026-9-22"    // date key the count above belongs to — must match todayDateKey() here
+//   warningCount: 5,             // ALL-TIME إنذار total — automatic (break-overrun) + manual, combined,
+//                                 // never reset by date. See addPersistentWarning() in relay.js and
+//                                 // addEmployeeWarning() below. Only cleared by the 🧹 reset button.
+//   warnings: { pushId: { text, createdAt, source: 'auto'|'manual', addedBy? } }, // full reason log,
+//                                 // shown as a hover tooltip on the ⚠️ badge
 //   breakLimitMinutes: 15,       // set from this panel; extension uses this instead of its 15-min default
 //   popup: { id, text, createdAt } // one-off message set from this panel, shown once by the extension
 //   shiftStart: "08:00",         // set from this panel — "HH:MM", employee's own local clock
@@ -2843,39 +2849,6 @@ function sanitizeNameKey(name) {
 // }
 function queueMonitorRef() { return fbDB.ref('queueMonitor/' + myWorkspaceOwner); }
 
-// Cache of every employee's logged manual-warning reasons, keyed by
-// employeeKey -> array of {text, createdAt}. Populated by a realtime
-// listener on the whole manualWarnings/{owner} tree so the hover tooltip
-// on the "تحذيرات" badge can list every reason without a per-row fetch.
-// These never expire/reset on their own — only resetManualWarnings() clears
-// the visible count, and the detailed log (this cache's source) is kept.
-let _manualWarningsCache = {};
-let _manualWarningsListenerAttached = false;
-function loadManualWarningsCache() {
-if (_manualWarningsListenerAttached) return;
-_manualWarningsListenerAttached = true;
-fbDB.ref('manualWarnings/' + myWorkspaceOwner).on('value', snap => {
-const data = snap.val() || {};
-const next = {};
-Object.keys(data).forEach(key => {
-next[key] = Object.values(data[key] || {})
-.filter(w => w && w.text)
-.sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
-});
-_manualWarningsCache = next;
-if (_lastQueueMonitorData) renderQueueMonitorTable(_lastQueueMonitorData);
-}, err => console.error('[manualWarnings] read failed:', err));
-}
-
-// Builds a hover tooltip listing every logged reason for an employee's
-// manual تحذيرات, most recent last, numbered if there's more than one.
-function manualWarningsTooltip(employeeKey) {
-const list = _manualWarningsCache[employeeKey] || [];
-if (!list.length) return 'تحذيرات يدوية — لا يوجد سبب مسجل';
-if (list.length === 1) return 'السبب: ' + list[0].text;
-return list.map((w, i) => `${i + 1}. ${w.text}`).join('\n');
-}
-
 // Must match todayKey() in content-queuemonitor.js exactly, so a warning
 // reported today doesn't silently show as stale/expired here.
 function todayDateKey() {
@@ -2883,7 +2856,6 @@ const d = new Date();
 return `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`;
 }
 let _queueMonitorListenerAttached = false;
-let _lastQueueMonitorData = null;
 
 // Fair-share batching:
 // perEmployee = min(30, floor(poolCount / numWorkingEmployees))
@@ -2914,12 +2886,10 @@ queueMonitorRef().child(key).update({ targetAssign: perEmployee }).catch(() => {
 
 function loadQueueMonitor() {
 if (!canUseAdminDashboard()) return;
-loadManualWarningsCache();
 if (_queueMonitorListenerAttached) return; // realtime listener already running, just re-render on tab switch
 _queueMonitorListenerAttached = true;
 queueMonitorRef().on('value', snap => {
 const data = snap.val() || {};
-_lastQueueMonitorData = data;
 renderQueueMonitorTable(data);
 recomputeQueueAssignments(data);
 }, err => {
@@ -3159,19 +3129,27 @@ const forceBadge = adminForce === 'ended'
 ? `<div style="font-size:0.72rem;color:#2563eb;margin-top:2px;">إجبار المشرف: ${adminForce === 'working' ? 'عمل' : 'استراحة'}</div>`
 : '';
 
-const warnCount = (typeof emp.warningsToday === 'number' && emp.warningsDate === todayDateKey()) ? emp.warningsToday : 0;
-const overEval = warnCount > 3;
+// Persistent, all-time إنذار count — automatic break-overrun warnings
+// (added server-side, see addPersistentWarning() in relay.js) and manual
+// admin-issued ones (added here via addEmployeeWarning()) both write into
+// the SAME warningCount + warnings/{pushId} fields, so there's only ever
+// one number and it is never reset by date. Today's separate
+// warningsToday/warningsDate still exists only to drive the "> 3 today =
+// تنزيل تقييم" flag below; it no longer has its own badge.
+const warnCount = (typeof emp.warningCount === 'number') ? emp.warningCount : 0;
+const todaysCount = (typeof emp.warningsToday === 'number' && emp.warningsDate === todayDateKey()) ? emp.warningsToday : 0;
+const overEval = todaysCount > 3;
+const warningEntries = emp.warnings ? Object.values(emp.warnings) : [];
+warningEntries.sort((a, b) => (a && a.createdAt || 0) - (b && b.createdAt || 0));
+const warningTooltip = warningEntries.length
+? warningEntries.map(w => {
+const when = w && w.createdAt ? new Date(w.createdAt).toLocaleString('ar-IQ') : '—';
+const reason = (w && w.text) ? w.text : ((w && w.source === 'auto') ? 'تجاوز وقت الاستراحة' : 'بدون سبب مذكور');
+return when + ' — ' + reason;
+}).join('\n')
+: 'لا توجد تفاصيل مسجلة';
 const warnBadge = warnCount > 0
-? `<span style="background:${overEval ? '#fecaca' : '#fee2e2'};color:${overEval ? '#7f1d1d' : '#b91c1c'};padding:2px 12px;border-radius:20px;font-weight:800;font-size:0.85rem;">⚠️ ${warnCount}</span>${overEval ? '<div style="font-size:0.7rem;color:#b91c1c;margin-top:2px;font-weight:700;">تنزيل تقييم</div>' : ''}`
-: '<span style="color:#94a3b8;font-size:0.85rem;">—</span>';
-
-// Manual admin-issued warnings — separate from the automatic break-overrun
-// count above (which the extension owns and re-reports every ~20s, so a
-// direct write to it would get clobbered). This lives on its own field,
-// manualWarningCount, incremented via a transaction from addEmployeeWarning().
-const manualCount = (typeof emp.manualWarningCount === 'number') ? emp.manualWarningCount : 0;
-const manualBadge = manualCount > 0
-? `<span title="${escapeHtml(manualWarningsTooltip(key))}" style="background:#fef3c7;color:#92400e;padding:2px 12px;border-radius:20px;font-weight:800;font-size:0.85rem;cursor:help;">📌 ${manualCount}</span>`
+? `<span title="${escapeHtml(warningTooltip)}" style="cursor:help;background:${overEval ? '#fecaca' : '#fee2e2'};color:${overEval ? '#7f1d1d' : '#b91c1c'};padding:2px 12px;border-radius:20px;font-weight:800;font-size:0.85rem;">⚠️ ${warnCount}</span>${overEval ? '<div style="font-size:0.7rem;color:#b91c1c;margin-top:2px;font-weight:700;">تنزيل تقييم</div>' : ''}`
 : '<span style="color:#94a3b8;font-size:0.85rem;">—</span>';
 
 return `
@@ -3180,7 +3158,6 @@ return `
 <td style="text-align:center"><span style="background:${count > 0 ? '#eff6ff' : '#f1f5f9'};color:${count > 0 ? '#2563eb' : '#94a3b8'};padding:2px 12px;border-radius:20px;font-weight:800;font-size:0.85rem;">${count}</span>${targetLabel}${qmRunLabel(emp, count)}</td>
 <td>${statusBadge}${breakInfo}${forceBadge}${shiftLabel}${overtimeLabel}</td>
 <td style="text-align:center">${warnBadge}</td>
-<td style="text-align:center">${manualBadge}</td>
 <td style="color:#64748b;font-size:0.82rem;">${lastUpdate}</td>
 <td>
 <button class="btn" style="padding:5px 10px;font-size:0.78rem;" onclick="forceEmployeeState('${key}','working')">إجبار عمل</button>
@@ -3188,7 +3165,7 @@ return `
 <button class="btn" style="padding:5px 10px;font-size:0.78rem;background:${adminForce === 'ended' ? '#475569' : ''};color:${adminForce === 'ended' ? '#fff' : ''};" onclick="if(confirm('إنهاء الدوام لهذا الموظف؟ لن يتمكن من العودة للعمل حتى تُلغي الإجبار.')) forceEmployeeState('${key}','ended')" title="يوقفه عن العمل ويمنعه من الضغط على بدء العمل حتى تُلغي الإجبار">⏹️ إنهاء الدوام</button>
 <button class="btn" style="padding:5px 10px;font-size:0.78rem;background:${adminForce === 'maintenance' ? '#dc2626' : ''};color:${adminForce === 'maintenance' ? '#fff' : ''};" onclick="forceEmployeeState('${key}','maintenance')" title="علامة/تنبيه فقط — لا يمنع الموظف من العمل فعليًا">🔧 صيانة</button>
 ${adminForce ? `<button class="btn" style="padding:5px 10px;font-size:0.78rem;" onclick="forceEmployeeState('${key}',null)">إلغاء الإجبار</button>` : ''}
-${warnCount > 0 ? `<button class="btn" style="padding:5px 10px;font-size:0.78rem;" onclick="resetEmployeeWarnings('${key}')" title="تصفير تحذيرات اليوم">🧹 تصفير التحذيرات</button>` : ''}
+${warnCount > 0 ? `<button class="btn" style="padding:5px 10px;font-size:0.78rem;" onclick="resetEmployeeWarnings('${key}')" title="تصفير كل الإنذارات (التلقائية واليدوية) وسجلّها">🧹 تصفير الإنذارات</button>` : ''}
 <div style="margin-top:6px;display:flex;align-items:center;gap:4px;" title="مدة الاستراحة بالدقائق لهذا الموظف">
 <input id="qm-breaklimit-input-${key}" type="number" min="1" placeholder="${breakLimit}"
 style="width:64px;padding:3px 6px;border-radius:6px;border:1px solid var(--border);font-size:0.78rem;">
@@ -3207,11 +3184,10 @@ style="padding:3px 6px;border-radius:6px;border:1px solid var(--border);font-siz
 style="width:120px;padding:3px 6px;border-radius:6px;border:1px solid var(--border);font-size:0.78rem;">
 <button class="btn" style="padding:4px 8px;font-size:0.75rem;" onclick="sendEmployeePopup('${key}')">📢 إرسال</button>
 </div>
-<div style="margin-top:6px;display:flex;align-items:center;gap:4px;" title="إضافة تحذير يدوي لهذا الموظف — منفصل عن تحذيرات تجاوز الاستراحة التلقائية، ولا يُصفّر تلقائيًا">
-<input id="qm-warning-input-${key}" type="text" placeholder="سبب التحذير (اختياري)..."
+<div style="margin-top:6px;display:flex;align-items:center;gap:4px;" title="إضافة إنذار لهذا الموظف — يُضاف لنفس عداد الإنذارات التلقائية، ويظهر سببه عند تمرير الفأرة فوق الشارة">
+<input id="qm-warning-input-${key}" type="text" placeholder="سبب الإنذار (اختياري)..."
 style="width:120px;padding:3px 6px;border-radius:6px;border:1px solid var(--border);font-size:0.78rem;">
-<button class="btn" style="padding:4px 8px;font-size:0.75rem;background:#fef3c7;color:#92400e;" onclick="addEmployeeWarning('${key}')">📌 إضافة تحذير</button>
-${manualCount > 0 ? `<button class="btn" style="padding:4px 8px;font-size:0.75rem;" onclick="resetManualWarnings('${key}')" title="تصفير التحذيرات اليدوية">🧹</button>` : ''}
+<button class="btn" style="padding:4px 8px;font-size:0.75rem;background:#fef3c7;color:#92400e;" onclick="addEmployeeWarning('${key}')">⚠️ إضافة إنذار</button>
 </div>
 </td>
 </tr>`;
@@ -3224,8 +3200,7 @@ container.innerHTML = poolBanner + `
 <th style="padding:8px">الموظف</th>
 <th style="padding:8px;text-align:center">طلبات تحت التدقيق</th>
 <th style="padding:8px">الحالة</th>
-<th style="padding:8px;text-align:center">تحذيرات اليوم</th>
-<th style="padding:8px;text-align:center">تحذيرات يدوية</th>
+<th style="padding:8px;text-align:center">الإنذارات</th>
 <th style="padding:8px">آخر تحديث</th>
 <th style="padding:8px">تحكم يدوي</th>
 </tr>
@@ -3344,48 +3319,46 @@ queueMonitorRef().child(employeeKey).update({ shiftStart: start, shiftEnd: end }
 .catch(err => alert('فشل تنفيذ الأمر: ' + err.message));
 }
 
-// Resets today's break-overrun warning count for one employee back to 0.
-// NOT a direct write to warningsToday — the extension re-reports its own
-// local warningsToday.count every LIVE_REPORT_MS (20s) regardless, which
-// would silently clobber a direct write right back to the old value. So
-// this instead sets a timestamp the extension polls for (same pattern as
-// adminForce/breakLimitMinutes/popup) — see /queuemonitor/state in
-// relay.js and pollAdminForce() in content-queuemonitor.js — and the
-// extension clears its own local count once it picks that up (within
-// ADMIN_POLL_MS, ~5s).
+// Resets ALL of an employee's إنذارات back to zero: the persistent,
+// never-expiring warningCount/warnings log (automatic + manual combined,
+// see addEmployeeWarning below and addPersistentWarning() in relay.js)
+// AND today's warningsToday/warningsDate that still drives the "> 3 today
+// = تنزيل تقييم" flag. warningsToday can't be zeroed with a direct write
+// here — the extension re-reports its own local count every ~20s and
+// would clobber it right back — so that part still goes through the
+// resetWarningsAt timestamp the extension/relay already watch for (see
+// /queuemonitor/state in relay.js). warningCount and warnings/, which
+// nothing else ever overwrites, are cleared directly.
 function resetEmployeeWarnings(employeeKey) {
-if (!confirm('تصفير تحذيرات اليوم لهذا الموظف؟')) return;
-queueMonitorRef().child(employeeKey).update({ resetWarningsAt: Date.now() })
+if (!confirm('تصفير كل إنذارات هذا الموظف (التلقائية واليدوية) وسجلّها بالكامل؟')) return;
+queueMonitorRef().child(employeeKey).update({
+resetWarningsAt: Date.now(),
+warningCount: 0,
+warnings: null
+})
 .catch(err => alert('فشل تنفيذ الأمر: ' + err.message));
 }
 
-// Manual admin-issued warning ("تحذير") for a single employee — distinct
-// from the automatic break-overrun warningsToday counter above, which the
-// extension owns and periodically overwrites. manualWarningCount lives on
-// its own field and is only ever touched from here, via a transaction so
-// concurrent clicks (or two admins) can't race and drop an increment. Each
-// warning's reason/timestamp is also logged to manualWarnings/{owner}/{key}
-// for a record of why it was issued.
-function manualWarningsRef(employeeKey) { return fbDB.ref('manualWarnings/' + myWorkspaceOwner + '/' + employeeKey); }
-
+// Manual إنذار from the dashboard. Writes into the SAME warningCount +
+// warnings/{pushId} fields the automatic break-overrun warnings use (see
+// addPersistentWarning() in relay.js) — there is only one إنذار system,
+// not a separate manual one — so a manual warning shows up in exactly the
+// same badge and hover tooltip as an automatic one. warningCount is
+// incremented via a transaction so two admins clicking at once (or a
+// double click) can't race and silently drop an increment.
 function addEmployeeWarning(employeeKey) {
 const input = document.getElementById('qm-warning-input-' + employeeKey);
 const reason = input ? (input.value || '').trim() : '';
-if (!confirm('إضافة تحذير لهذا الموظف؟' + (reason ? ('\n\nالسبب: ' + reason) : ''))) return;
-queueMonitorRef().child(employeeKey).child('manualWarningCount').transaction(current => (current || 0) + 1)
-.then(() => manualWarningsRef(employeeKey).push({
+if (!confirm('إضافة إنذار لهذا الموظف؟' + (reason ? ('\n\nالسبب: ' + reason) : ''))) return;
+queueMonitorRef().child(employeeKey).child('warningCount').transaction(current => (current || 0) + 1)
+.then(() => queueMonitorRef().child(employeeKey).child('warnings').push({
 text: reason || null,
 createdAt: Date.now(),
+source: 'manual',
 addedBy: (fbAuth.currentUser && fbAuth.currentUser.email) || null
 }))
 .then(() => { if (input) input.value = ''; })
-.catch(err => alert('فشل إضافة التحذير: ' + err.message));
-}
-
-function resetManualWarnings(employeeKey) {
-if (!confirm('تصفير التحذيرات اليدوية لهذا الموظف؟ (السجل التفصيلي يبقى محفوظًا)')) return;
-queueMonitorRef().child(employeeKey).child('manualWarningCount').set(0)
-.catch(err => alert('فشل تنفيذ الأمر: ' + err.message));
+.catch(err => alert('فشل إضافة الإنذار: ' + err.message));
 }
 
 // Instant one-off popup message to a single employee. The extension
