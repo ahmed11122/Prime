@@ -3037,7 +3037,7 @@ qmFillShifts(Object.keys(data).filter(k => k !== '_pool').map(k => (data[k] && d
 // created inputs afterward, keeps unsaved text alive across a repaint it
 // has nothing to do with.
 const pendingInputValues = {};
-container.querySelectorAll('input[id^="qm-breaklimit-input-"], input[id^="qm-popup-input-"], input[id^="qm-shiftstart-input-"], input[id^="qm-shiftend-input-"]').forEach(el => {
+container.querySelectorAll('input[id^="qm-breaklimit-input-"], input[id^="qm-popup-input-"], input[id^="qm-shiftstart-input-"], input[id^="qm-shiftend-input-"], input[id^="qm-warning-input-"]').forEach(el => {
 if (el.value) pendingInputValues[el.id] = el.value;
 });
 const activeEl = document.activeElement;
@@ -3129,12 +3129,22 @@ const warnBadge = warnCount > 0
 ? `<span style="background:${overEval ? '#fecaca' : '#fee2e2'};color:${overEval ? '#7f1d1d' : '#b91c1c'};padding:2px 12px;border-radius:20px;font-weight:800;font-size:0.85rem;">⚠️ ${warnCount}</span>${overEval ? '<div style="font-size:0.7rem;color:#b91c1c;margin-top:2px;font-weight:700;">تنزيل تقييم</div>' : ''}`
 : '<span style="color:#94a3b8;font-size:0.85rem;">—</span>';
 
+// Manual admin-issued warnings — separate from the automatic break-overrun
+// count above (which the extension owns and re-reports every ~20s, so a
+// direct write to it would get clobbered). This lives on its own field,
+// manualWarningCount, incremented via a transaction from addEmployeeWarning().
+const manualCount = (typeof emp.manualWarningCount === 'number') ? emp.manualWarningCount : 0;
+const manualBadge = manualCount > 0
+? `<span style="background:#fef3c7;color:#92400e;padding:2px 12px;border-radius:20px;font-weight:800;font-size:0.85rem;">📌 ${manualCount}</span>`
+: '<span style="color:#94a3b8;font-size:0.85rem;">—</span>';
+
 return `
 <tr>
 <td style="font-weight:700;cursor:pointer;color:var(--accent);" data-k="${escapeHtml(key)}" data-n="${escapeHtml(name)}" onclick="openSessionLog(this.dataset.k,this.dataset.n)" title="عرض سجل أوقات العمل والاستراحة">${escapeHtml(name)}${posLabel}</td>
 <td style="text-align:center"><span style="background:${count > 0 ? '#eff6ff' : '#f1f5f9'};color:${count > 0 ? '#2563eb' : '#94a3b8'};padding:2px 12px;border-radius:20px;font-weight:800;font-size:0.85rem;">${count}</span>${targetLabel}${qmRunLabel(emp, count)}</td>
 <td>${statusBadge}${breakInfo}${forceBadge}${shiftLabel}${overtimeLabel}</td>
 <td style="text-align:center">${warnBadge}</td>
+<td style="text-align:center">${manualBadge}</td>
 <td style="color:#64748b;font-size:0.82rem;">${lastUpdate}</td>
 <td>
 <button class="btn" style="padding:5px 10px;font-size:0.78rem;" onclick="forceEmployeeState('${key}','working')">إجبار عمل</button>
@@ -3161,6 +3171,12 @@ style="padding:3px 6px;border-radius:6px;border:1px solid var(--border);font-siz
 style="width:120px;padding:3px 6px;border-radius:6px;border:1px solid var(--border);font-size:0.78rem;">
 <button class="btn" style="padding:4px 8px;font-size:0.75rem;" onclick="sendEmployeePopup('${key}')">📢 إرسال</button>
 </div>
+<div style="margin-top:6px;display:flex;align-items:center;gap:4px;" title="إضافة إنذار يدوي لهذا الموظف — منفصل عن تحذيرات تجاوز الاستراحة التلقائية">
+<input id="qm-warning-input-${key}" type="text" placeholder="سبب الإنذار (اختياري)..."
+style="width:120px;padding:3px 6px;border-radius:6px;border:1px solid var(--border);font-size:0.78rem;">
+<button class="btn" style="padding:4px 8px;font-size:0.75rem;background:#fef3c7;color:#92400e;" onclick="addEmployeeWarning('${key}')">📌 إضافة إنذار</button>
+${manualCount > 0 ? `<button class="btn" style="padding:4px 8px;font-size:0.75rem;" onclick="resetManualWarnings('${key}')" title="تصفير الإنذارات اليدوية">🧹</button>` : ''}
+</div>
 </td>
 </tr>`;
 }).join('');
@@ -3173,6 +3189,7 @@ container.innerHTML = poolBanner + `
 <th style="padding:8px;text-align:center">طلبات تحت التدقيق</th>
 <th style="padding:8px">الحالة</th>
 <th style="padding:8px;text-align:center">تحذيرات اليوم</th>
+<th style="padding:8px;text-align:center">إنذارات يدوية</th>
 <th style="padding:8px">آخر تحديث</th>
 <th style="padding:8px">تحكم يدوي</th>
 </tr>
@@ -3303,6 +3320,35 @@ queueMonitorRef().child(employeeKey).update({ shiftStart: start, shiftEnd: end }
 function resetEmployeeWarnings(employeeKey) {
 if (!confirm('تصفير تحذيرات اليوم لهذا الموظف؟')) return;
 queueMonitorRef().child(employeeKey).update({ resetWarningsAt: Date.now() })
+.catch(err => alert('فشل تنفيذ الأمر: ' + err.message));
+}
+
+// Manual admin-issued warning ("إنذار") for a single employee — distinct
+// from the automatic break-overrun warningsToday counter above, which the
+// extension owns and periodically overwrites. manualWarningCount lives on
+// its own field and is only ever touched from here, via a transaction so
+// concurrent clicks (or two admins) can't race and drop an increment. Each
+// warning's reason/timestamp is also logged to manualWarnings/{owner}/{key}
+// for a record of why it was issued.
+function manualWarningsRef(employeeKey) { return fbDB.ref('manualWarnings/' + myWorkspaceOwner + '/' + employeeKey); }
+
+function addEmployeeWarning(employeeKey) {
+const input = document.getElementById('qm-warning-input-' + employeeKey);
+const reason = input ? (input.value || '').trim() : '';
+if (!confirm('إضافة إنذار لهذا الموظف؟' + (reason ? ('\n\nالسبب: ' + reason) : ''))) return;
+queueMonitorRef().child(employeeKey).child('manualWarningCount').transaction(current => (current || 0) + 1)
+.then(() => manualWarningsRef(employeeKey).push({
+text: reason || null,
+createdAt: Date.now(),
+addedBy: (fbAuth.currentUser && fbAuth.currentUser.email) || null
+}))
+.then(() => { if (input) input.value = ''; })
+.catch(err => alert('فشل إضافة الإنذار: ' + err.message));
+}
+
+function resetManualWarnings(employeeKey) {
+if (!confirm('تصفير الإنذارات اليدوية لهذا الموظف؟ (السجل التفصيلي يبقى محفوظًا)')) return;
+queueMonitorRef().child(employeeKey).child('manualWarningCount').set(0)
 .catch(err => alert('فشل تنفيذ الأمر: ' + err.message));
 }
 
