@@ -3350,6 +3350,9 @@ function addEmployeeWarning(employeeKey) {
 const input = document.getElementById('qm-warning-input-' + employeeKey);
 const reason = input ? (input.value || '').trim() : '';
 if (!confirm('إضافة إنذار لهذا الموظف؟' + (reason ? ('\n\nالسبب: ' + reason) : ''))) return;
+// The employee sees this as the persistent ⚠️ badge next to their toggle
+// button (qm-warning-badge in content-queuemonitor.js, fed by
+// warningCount via /queuemonitor/state) — not a popup.
 queueMonitorRef().child(employeeKey).child('warningCount').transaction(current => (current || 0) + 1)
 .then(() => queueMonitorRef().child(employeeKey).child('warnings').push({
 text: reason || null,
