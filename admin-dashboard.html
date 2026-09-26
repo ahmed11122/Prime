@@ -490,8 +490,38 @@ flex-wrap: wrap;
 /* Responsive adjustments */
 @media (max-width: 900px) {
 #adminRoot { flex-direction: column; }
-.sidebar { width: 100%; }
+/* Sidebar becomes a sticky horizontal tab strip instead of a tall vertical
+   list — on a phone, stacking every nav button above the content pushed
+   the actual dashboard hundreds of pixels down before this fix. */
+.sidebar {
+width: 100%;
+flex-direction: row;
+align-items: center;
+gap: 10px;
+padding: 10px 12px;
+position: sticky;
+top: 0;
+z-index: 40;
+box-shadow: 0 2px 12px rgba(0,0,0,0.15);
+}
+.sidebar-brand { padding: 0; flex-shrink: 0; }
+.sidebar-nav {
+flex-direction: row;
+flex-wrap: nowrap;
+overflow-x: auto;
+-webkit-overflow-scrolling: touch;
+gap: 6px;
+padding-bottom: 2px;
+}
+.tab {
+flex-shrink: 0;
+width: auto;
+white-space: nowrap;
+padding: 9px 14px;
+}
 .main-content { padding: 16px; }
+.stats-grid { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); }
+.form-grid { grid-template-columns: 1fr; }
 }
 
 @media (max-width: 640px) {
@@ -499,12 +529,20 @@ flex-wrap: wrap;
 .card-panel { padding: 14px; }
 .top-header { padding: 12px 16px; }
 .page-title { font-size: 1rem; }
+.sidebar-brand span:last-child { font-size: 1rem; }
+.tab { font-size: 0.78rem; padding: 8px 12px; }
+.tab span:first-child { font-size: 0.95rem; }
+.stats-grid { grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 10px; }
+.ov-card { padding: 14px; }
+.ov-card-num { font-size: 1.5rem; }
 .qm-grid { grid-template-columns: 1fr; }
+.qm-card { padding: 12px; }
 .leave-filter-bar { flex-direction: column; align-items: stretch; }
 .leave-filter-bar input[type="text"] { width: 100%; }
 .leave-row, .leave-row-info { align-items: flex-start; }
 .qm-input-row input[type="text"] { width: 100%; flex: 1; }
 .qm-card-head { flex-direction: column; align-items: flex-start; }
+.qm-actions-row .btn { flex: 1 1 auto; }
 }
 </style>
 </head>
@@ -2760,6 +2798,7 @@ _leavesDataListenerAttached = true;
 fbDB.ref(dbPath('appData/leavesData')).on('value', snap => {
 try { window._leavesDataCache = JSON.parse(snap.val() || '[]'); } catch (e) { window._leavesDataCache = []; }
 renderLeaveHistory();
+if (_qmLastData) renderQueueMonitorTable(_qmLastData);
 }, () => { _leavesDataListenerAttached = false; });
 }
 
@@ -3271,6 +3310,21 @@ function sanitizeNameKey(name) {
 // }
 function queueMonitorRef() { return fbDB.ref('queueMonitor/' + myWorkspaceOwner); }
 
+// Last snapshot rendered by the queue-monitor listener below, kept around so
+// that when leavesData changes (an admin toggles "إجازة/زمنية اليوم" from a
+// card, see qmSetTodayLeaveFromCard) we can re-render the cards immediately
+// without waiting for the next queueMonitor tick.
+let _qmLastData = null;
+
+// true when `name` has an إجازة/زمنية/مرضية record for today — used to
+// exclude them from the fair-share order distribution below and from the
+// "الدور/الحصة" labels in the card, same as an off-shift employee already is.
+function qmIsOnLeaveToday(name) {
+if (!name) return false;
+const today = qmToday();
+return (window._leavesDataCache || []).some(r => r.emp === name && r.date === today);
+}
+
 // Must match todayKey() in content-queuemonitor.js exactly, so a warning
 // reported today doesn't silently show as stale/expired here.
 function todayDateKey() {
@@ -3279,41 +3333,26 @@ return `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`;
 }
 let _queueMonitorListenerAttached = false;
 
-// Fair-share batching:
-// perEmployee = min(30, floor(poolCount / numWorkingEmployees))
-// e.g. 54 pool / 4 working -> floor(13.5) = 13 each (2 left in pool for the next round)
-// e.g. 200 pool / 2 working -> floor(100) = 100, but capped at 30 -> 30 each
-const QUEUE_BATCH_CAP = 30;
-
-function recomputeQueueAssignments(data) {
-if (!data) return;
-const poolCount = (data._pool && typeof data._pool.count === 'number') ? data._pool.count : 0;
-const workingKeys = Object.keys(data)
-.filter(k => k !== '_pool' && data[k] && data[k].working === true && !data[k].manualTarget && !qmOffShift(data[k]))
-// FIFO order: whoever pressed بدء العمل first gets served first when there isn't enough for everyone
-.sort((a, b) => (data[a].queueJoinedAt || 0) - (data[b].queueJoinedAt || 0));
-
-if (workingKeys.length === 0 || poolCount === 0) return;
-
-const perEmployee = Math.min(QUEUE_BATCH_CAP, Math.floor(poolCount / workingKeys.length));
-if (perEmployee <= 0) return; // not enough orders to give everyone at least 1 — leave targets as-is
-
-workingKeys.forEach(key => {
-const current = data[key].targetAssign;
-if (current !== perEmployee) {
-queueMonitorRef().child(key).update({ targetAssign: perEmployee }).catch(() => {});
-}
-});
-}
+// NOTE: fair-share batch computation (perEmployee = poolCount / working count,
+// capped at 30) is no longer done here — it moved server-side into relay.js's
+// recomputeQueueAssignments(), which runs on every employee report regardless
+// of whether this dashboard tab is open. This file only ever displays
+// targetAssign now (see posLabel/targetLabel below); it doesn't compute or
+// write it.
 
 function loadQueueMonitor() {
 if (!canUseAdminDashboard()) return;
+// Make sure window._leavesDataCache is live even if the admin never opened
+// "طلبات الموظفين" — the cards' "إجازة/زمنية اليوم" buttons and the
+// not-working exclusion above both read from that cache. Guarded by its
+// own attach flag, so this is a no-op after the first call.
+loadLeaveHistory();
 if (_queueMonitorListenerAttached) return; // realtime listener already running, just re-render on tab switch
 _queueMonitorListenerAttached = true;
 queueMonitorRef().on('value', snap => {
 const data = snap.val() || {};
+_qmLastData = data;
 renderQueueMonitorTable(data);
-recomputeQueueAssignments(data);
 }, err => {
 _queueMonitorListenerAttached = false;
 const container = document.getElementById('queueMonitorList');
@@ -3522,9 +3561,10 @@ const target = (typeof emp.targetAssign === 'number') ? emp.targetAssign : null;
 const isManual = !!emp.manualTarget;
 const lastUpdate = emp.lastUpdate ? new Date(emp.lastUpdate).toLocaleTimeString('ar-IQ') : '—';
 
-if (isWorking && !off) queuePosition++;
-const posLabel = (isWorking && !off) ? `<div style="font-size:0.72rem;color:#2563eb;margin-top:2px;">الدور: ${queuePosition}</div>` : '';
-const targetLabel = (isWorking && !off && target != null)
+const onLeaveToday = qmIsOnLeaveToday(name);
+if (isWorking && !off && !onLeaveToday) queuePosition++;
+const posLabel = (isWorking && !off && !onLeaveToday) ? `<div style="font-size:0.72rem;color:#2563eb;margin-top:2px;">الدور: ${queuePosition}</div>` : '';
+const targetLabel = (isWorking && !off && !onLeaveToday && target != null)
 ? `<div style="font-size:0.72rem;color:#0f172a;margin-top:2px;">الحصة الحالية: ${target}${isManual ? ' (يدوي)' : ''}</div>`
 : '';
 
@@ -3600,6 +3640,7 @@ const warnBadge = warnCount > 0
 : '<span style="color:#94a3b8;font-size:0.85rem;">—</span>';
 
 const todayLeaveBadge = getTodayLeaveBadgeForName(name);
+const todayLeaveRecord = (window._leavesDataCache || []).find(r => r.emp === name && r.date === qmToday());
 
 return `
 <div class="qm-card">
@@ -3644,6 +3685,11 @@ ${adminForce ? `<button class="btn" style="padding:5px 10px;font-size:0.78rem;" 
 <span style="color:#94a3b8;font-size:0.75rem;">←</span>
 <input id="qm-shiftend-input-${key}" type="time" value="${shiftEnd}">
 <button class="btn" style="padding:4px 8px;font-size:0.75rem;" onclick="setEmployeeShift('${key}')">🕒 حفظ الدوام</button>
+</div>
+<div class="qm-actions-row" title="يسجّل الموظف كغائب اليوم (إجازة كاملة أو زمنية جزئية) — يُستبعد تلقائيًا من عداد الدور وتوزيع الحصص لهذا اليوم، ويظهر في سجل الإجازات">
+<button class="btn" style="padding:5px 10px;font-size:0.78rem;${todayLeaveRecord && todayLeaveRecord.type === 'اجازة' ? 'background:#dbeafe;color:#1e40af;' : ''}" onclick="qmSetTodayLeaveFromCard('${key}','اجازة')">🏖️ إجازة اليوم</button>
+<button class="btn" style="padding:5px 10px;font-size:0.78rem;${todayLeaveRecord && todayLeaveRecord.type === 'زمنية' ? 'background:#ffedd5;color:#9a3412;' : ''}" onclick="qmSetTodayLeaveFromCard('${key}','زمنية')">⏰ زمنية اليوم</button>
+${todayLeaveRecord ? `<button class="btn" style="padding:5px 10px;font-size:0.78rem;" onclick="qmClearTodayLeaveFromCard('${key}')">❌ إلغاء</button>` : ''}
 </div>
 <div class="qm-input-row">
 <input id="qm-popup-input-${key}" type="text" placeholder="رسالة فورية...">
@@ -3837,6 +3883,57 @@ const updates = { adminForce: forceValue };
 if (forceValue === 'working') updates.queueJoinedAt = Date.now();
 queueMonitorRef().child(employeeKey).update(updates)
 .catch(err => alert('فشل تنفيذ الأمر: ' + err.message));
+}
+
+// ═══ Quick إجازة/زمنية toggle from inside a queue-monitor card ═══
+// Writes into the SAME appData/leavesData array as the dedicated
+// "تسجيل إجازة أو زمنية" form (submitManualLeave), so it shows up in the
+// leave history and drives the existing "🏖️/⏰ اليوم" badge — this is just a
+// one-tap shortcut for "mark them off today", always dated today, with no
+// notes or زمنية hour-range (use the full form for that level of detail).
+// Looks the employee's name up from queueMonitor by key rather than passing
+// it through the onclick string, since names can contain characters (') that
+// would break inline HTML attributes.
+function qmSetTodayLeaveFromCard(employeeKey, type) {
+queueMonitorRef().child(employeeKey).once('value').then(snap => {
+const name = (snap.val() && snap.val().name) || employeeKey;
+return qmApplyTodayLeave(name, type);
+}).catch(err => alert('تعذّر التسجيل: ' + (err && err.message ? err.message : err)));
+}
+
+function qmClearTodayLeaveFromCard(employeeKey) {
+queueMonitorRef().child(employeeKey).once('value').then(snap => {
+const name = (snap.val() && snap.val().name) || employeeKey;
+return qmClearTodayLeave(name);
+}).catch(err => alert('تعذّر الإلغاء: ' + (err && err.message ? err.message : err)));
+}
+
+function qmApplyTodayLeave(name, type) {
+const today = qmToday();
+return fbDB.ref(dbPath('appData/leavesData')).once('value').then(lsnap => {
+let leaves = [];
+try { leaves = JSON.parse(lsnap.val() || '[]'); } catch (e) { leaves = []; }
+leaves = leaves.filter(r => !(r.emp === name && r.date === today)); // one record/day from this shortcut
+leaves.push({ emp: name, date: today, type, notes: '', id: Date.now(), zmanya_from: '', zmanya_to: '', hours: null, sickProofImage: null, addedBy: myDisplayName || 'المشرف' });
+leaves.sort((a, b) => new Date(b.date) - new Date(a.date));
+return fbDB.ref(dbPath('appData/leavesData')).set(JSON.stringify(leaves));
+}).then(() => {
+logActivity('تسجيل إجازة/زمنية من بطاقة المتابعة', `${name} — ${type} — ${today}`);
+});
+}
+
+function qmClearTodayLeave(name) {
+const today = qmToday();
+return fbDB.ref(dbPath('appData/leavesData')).once('value').then(lsnap => {
+let leaves = [];
+try { leaves = JSON.parse(lsnap.val() || '[]'); } catch (e) { leaves = []; }
+const before = leaves.length;
+leaves = leaves.filter(r => !(r.emp === name && r.date === today));
+if (leaves.length === before) return;
+return fbDB.ref(dbPath('appData/leavesData')).set(JSON.stringify(leaves)).then(() => {
+logActivity('إلغاء إجازة/زمنية اليوم من بطاقة المتابعة', `${name} — ${today}`);
+});
+});
 }
 
 function extensionPermissionsRef() { return fbDB.ref('extensionPermissions/' + myWorkspaceOwner); }
