@@ -350,11 +350,161 @@ color: var(--text-muted);
 tr:last-child td { border-bottom: none; }
 tr:hover td { background: #fafafa; }
 
+/* ═══ Leave / day-off badges ═══ */
+.leave-badge {
+display: inline-flex;
+align-items: center;
+gap: 4px;
+padding: 2px 12px;
+border-radius: 20px;
+font-weight: 800;
+font-size: 0.78rem;
+white-space: nowrap;
+}
+.leave-badge-اجازة { background: #dbeafe; color: #1e40af; }
+.leave-badge-زمنية { background: #ffedd5; color: #9a3412; }
+.leave-badge-مرضية { background: #fee2e2; color: #991b1b; }
+.leave-badge-other { background: #e2e8f0; color: #334155; }
+
+.leave-row {
+display: flex;
+align-items: center;
+justify-content: space-between;
+gap: 10px;
+background: var(--bg-main);
+border: 1px solid var(--border);
+border-radius: 10px;
+padding: 12px 16px;
+margin-bottom: 8px;
+flex-wrap: wrap;
+}
+.leave-row-info { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.leave-filter-bar {
+display: flex;
+flex-wrap: wrap;
+gap: 8px;
+align-items: center;
+margin-bottom: 14px;
+background: var(--bg-main);
+border: 1px solid var(--border);
+border-radius: 10px;
+padding: 10px;
+}
+.leave-filter-bar input, .leave-filter-bar select {
+padding: 7px 10px;
+border-radius: 8px;
+border: 1px solid var(--border);
+font-size: 0.82rem;
+font-family: inherit;
+}
+.leave-filter-bar input[type="text"] { width: 160px; }
+
+/* ═══ Queue monitor: responsive card grid (replaces the old wide table) ═══ */
+.qm-grid {
+display: grid;
+grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+gap: 14px;
+}
+.qm-card {
+background: var(--surface);
+border: 1px solid var(--border);
+border-radius: var(--radius);
+padding: 16px;
+box-shadow: var(--shadow-sm);
+display: flex;
+flex-direction: column;
+gap: 10px;
+min-width: 0;
+}
+.qm-card-head {
+display: flex;
+align-items: flex-start;
+justify-content: space-between;
+gap: 8px;
+flex-wrap: wrap;
+}
+.qm-card-name {
+font-weight: 800;
+color: var(--text-main);
+cursor: pointer;
+font-size: 0.95rem;
+}
+.qm-card-name:hover { color: var(--accent); }
+.qm-card-count {
+background: #f1f5f9;
+color: #94a3b8;
+padding: 3px 14px;
+border-radius: 20px;
+font-weight: 800;
+font-size: 0.9rem;
+flex-shrink: 0;
+}
+.qm-card-count.has-orders { background: #eff6ff; color: #2563eb; }
+.qm-card-meta { display: flex; flex-direction: column; gap: 3px; }
+.qm-card-badges { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.qm-card-warn { display: flex; align-items: center; gap: 8px; }
+.qm-card-controls summary {
+cursor: pointer;
+font-weight: 700;
+font-size: 0.8rem;
+color: var(--accent);
+padding: 6px 0;
+list-style: none;
+}
+.qm-card-controls summary::-webkit-details-marker { display: none; }
+.qm-card-controls summary::before { content: '⚙️ '; }
+.qm-card-controls-body {
+display: flex;
+flex-direction: column;
+gap: 8px;
+padding-top: 8px;
+border-top: 1px solid var(--border);
+margin-top: 4px;
+}
+.qm-actions-row { display: flex; flex-wrap: wrap; gap: 6px; }
+.qm-input-row {
+display: flex;
+align-items: center;
+gap: 6px;
+flex-wrap: wrap;
+}
+.qm-input-row input {
+padding: 4px 8px;
+border-radius: 6px;
+border: 1px solid var(--border);
+font-size: 0.78rem;
+min-width: 0;
+}
+.qm-pool-banner {
+display: flex;
+align-items: center;
+gap: 10px;
+margin-bottom: 14px;
+background: var(--bg-main);
+border: 1px solid var(--border);
+border-radius: 8px;
+padding: 10px 14px;
+flex-wrap: wrap;
+}
+
 /* Responsive adjustments */
 @media (max-width: 900px) {
 #adminRoot { flex-direction: column; }
 .sidebar { width: 100%; }
 .main-content { padding: 16px; }
+}
+
+@media (max-width: 640px) {
+.main-content { padding: 10px; }
+.card-panel { padding: 14px; }
+.top-header { padding: 12px 16px; }
+.page-title { font-size: 1rem; }
+.qm-grid { grid-template-columns: 1fr; }
+.leave-filter-bar { flex-direction: column; align-items: stretch; }
+.leave-filter-bar input[type="text"] { width: 100%; }
+.leave-row, .leave-row-info { align-items: flex-start; }
+.qm-input-row input[type="text"] { width: 100%; flex: 1; }
+.qm-card-head { flex-direction: column; align-items: flex-start; }
 }
 </style>
 </head>
@@ -604,6 +754,49 @@ tr:hover td { background: #fafafa; }
 
 <!-- ═══ Section: Employee Requests ═══ -->
 <div class="admin-section" data-sec="requests" style="display:none">
+
+<div class="card-panel">
+<div class="card-header">
+<div class="card-title">➕ تسجيل إجازة أو زمنية لموظف مباشرة</div>
+<div class="card-subtitle">لتسجيل يوم إجازة أو وقت زمنية لموظف مباشرة من هنا دون انتظار طلب منه — يُحفظ فورًا في سجله.</div>
+</div>
+<div class="form-grid">
+<div class="form-group">
+<label class="form-label">الموظف</label>
+<select id="leaveFormEmployee" onchange="updateZmanyaMonthlyHint()"><option value="">جارِ التحميل...</option></select>
+</div>
+<div class="form-group">
+<label class="form-label">النوع</label>
+<select id="leaveFormType" onchange="onLeaveFormTypeChange()">
+<option value="اجازة">🏖️ إجازة (يوم كامل)</option>
+<option value="زمنية">⏰ زمنية (جزء من اليوم)</option>
+<option value="مرضية">🤒 إجازة مرضية</option>
+</select>
+</div>
+<div class="form-group">
+<label class="form-label">التاريخ</label>
+<input type="date" id="leaveFormDate" onchange="updateZmanyaMonthlyHint()">
+</div>
+<div class="form-group" id="leaveFormZmanyaWrap" style="display:none">
+<label class="form-label">من — إلى</label>
+<div style="display:flex;gap:6px;align-items:center">
+<input type="time" id="leaveFormZmanyaFrom" onchange="updateZmanyaMonthlyHint()" style="flex:1">
+<span style="color:#94a3b8">←</span>
+<input type="time" id="leaveFormZmanyaTo" onchange="updateZmanyaMonthlyHint()" style="flex:1">
+</div>
+<div id="leaveFormZmanyaHint" style="font-size:0.75rem;color:#94a3b8;margin-top:4px"></div>
+</div>
+</div>
+<div class="form-group" style="margin-top:4px">
+<label class="form-label">ملاحظات (اختياري)</label>
+<input type="text" id="leaveFormNotes" placeholder="سبب الإجازة/الزمنية...">
+</div>
+<div style="display:flex;align-items:center;gap:12px;margin-top:12px">
+<button onclick="submitManualLeave()" class="btn btn-success">تسجيل</button>
+<span id="leaveFormStatus" style="font-size:0.85rem;font-weight:700"></span>
+</div>
+</div>
+
 <div class="card-panel">
 <div class="card-header">
 <div class="card-title">طلبات الموظفين الجديدة</div>
@@ -618,6 +811,27 @@ tr:hover td { background: #fafafa; }
 <div class="card-title">سجل طلبات الموظفين (المقبولة والمرفوضة)</div>
 </div>
 <div id="employeeRequestsHistoryList">
+<div style="text-align:center;color:#94a3b8;padding:16px;">جارِ التحميل...</div>
+</div>
+</div>
+
+<div class="card-panel">
+<div class="card-header">
+<div class="card-title">📅 سجل الإجازات والزمنية — كل الأيام</div>
+<div class="card-subtitle">كل الإجازات والزمنية المسجّلة لكل الموظفين، بما فيها الأيام القديمة — قابلة للفلترة بالاسم والنوع والتاريخ.</div>
+</div>
+<div class="leave-filter-bar">
+<input type="text" id="leaveHistNameFilter" placeholder="🔍 اسم الموظف" oninput="renderLeaveHistory()">
+<select id="leaveHistTypeFilter" onchange="renderLeaveHistory()">
+<option value="all">كل الأنواع</option>
+<option value="اجازة">🏖️ إجازة</option>
+<option value="زمنية">⏰ زمنية</option>
+<option value="مرضية">🤒 مرضية</option>
+</select>
+<span style="display:flex;align-items:center;gap:6px;font-size:0.82rem">من <input type="date" id="leaveHistFrom" onchange="renderLeaveHistory()"> إلى <input type="date" id="leaveHistTo" onchange="renderLeaveHistory()"></span>
+<button class="btn" style="padding:6px 12px;font-size:0.8rem" onclick="resetLeaveHistoryFilters()">🔄 إعادة تعيين</button>
+</div>
+<div id="leaveHistoryList">
 <div style="text-align:center;color:#94a3b8;padding:16px;">جارِ التحميل...</div>
 </div>
 </div>
@@ -662,15 +876,15 @@ tr:hover td { background: #fafafa; }
 <div class="admin-section" data-sec="queuemonitor" style="display:none">
 <div class="card-panel">
 <div class="card-header">
-<div class="card-title">متابعة الطلبات المباشرة</div>
-<div class="card-subtitle">عدد الطلبات (تحت التدقيق) لكل موظف لحظيًا، وحالة العمل/الاستراحة، وتحذيرات تجاوز وقت الاستراحة اليوم (أكثر من 3 = تنزيل تقييم)، مع إمكانية التحكم يدويًا من هنا.</div>
+<div class="card-title">📦 متابعة الطلبات المباشرة</div>
+<div class="card-subtitle">عدد الطلبات (تحت التدقيق) لكل موظف لحظيًا، وحالة العمل/الاستراحة، وتحذيرات تجاوز وقت الاستراحة اليوم (أكثر من 3 = تنزيل تقييم). اضغط ⚙️ داخل بطاقة أي موظف للتحكم به يدويًا.</div>
 </div>
-<div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:12px;">
-<button class="btn" id="qmViewBtn-live" onclick="qmSetView('live')">🔴 مباشر</button>
-<button class="btn" id="qmViewBtn-perf" onclick="qmSetView('perf')">📊 أداء الدورات (x ← 0)</button>
-<select id="qmShiftSel" onchange="qmRefresh()" style="padding:6px;border-radius:8px;border:1px solid var(--border);"><option value="all">كل الدوامات</option></select>
-<input id="qmNameFilter" type="text" placeholder="🔍 اسم الموظف" oninput="qmRefresh()" style="padding:6px 10px;border-radius:8px;border:1px solid var(--border);width:140px;">
-<span id="qmDateBox" style="display:none;align-items:center;gap:6px;font-size:0.82rem;">من <input type="date" id="qmFrom" onchange="qmRefresh()"> إلى <input type="date" id="qmTo" onchange="qmRefresh()"> <button class="btn" style="padding:4px 10px;" onclick="qm.cache=null;qmRefresh()">🔄</button></span>
+<div class="leave-filter-bar">
+<button class="btn" id="qmViewBtn-live" onclick="qmSetView('live')">🔴 مباشر الآن</button>
+<button class="btn" id="qmViewBtn-perf" onclick="qmSetView('perf')">📅 الأيام السابقة (أداء الدورات)</button>
+<select id="qmShiftSel" onchange="qmRefresh()"><option value="all">كل الدوامات</option></select>
+<input id="qmNameFilter" type="text" placeholder="🔍 اسم الموظف" oninput="qmRefresh()">
+<span id="qmDateBox" style="display:none;align-items:center;gap:6px;font-size:0.82rem;flex-wrap:wrap">من <input type="date" id="qmFrom" onchange="qmRefresh()"> إلى <input type="date" id="qmTo" onchange="qmRefresh()"> <button class="btn" style="padding:4px 10px;" onclick="qm.cache=null;qmRefresh()">🔄</button></span>
 </div>
 <div id="queueMonitorList">
 <div style="text-align:center;color:#94a3b8;padding:16px;">جارِ التحميل...</div>
@@ -1114,6 +1328,8 @@ function renderAdminDashboard() {
 if (!canUseAdminDashboard()) return;
 populateNewAcctEmployeeSelect();
 populateMergeNameSelect();
+populateLeaveFormEmployeeSelect();
+loadLeaveHistory();
 loadPendingEmployeeRequests();
 renderAnnouncementDeptOptions();
 renderAnnouncementHistory();
@@ -2332,6 +2548,30 @@ try { leaves = JSON.parse(leavesSnap.val() || '[]'); } catch (e) { leaves = []; 
 leaves = leaves.map(r => (r.emp === oldName ? { ...r, emp: newName } : r));
 await fbDB.ref(dbPath('appData/leavesData')).set(JSON.stringify(leaves));
 
+// Bug fix: the "الأيام السابقة" (queueRuns) performance history is filtered
+// by the `name` stored inside each run record, keyed by employeeKey — not by
+// name — so merging "old ← new" here never used to touch it. Any run
+// recorded before the merge kept the OLD spelling forever, and filtering the
+// history by the corrected name would silently miss it. queueRuns is keyed
+// by date at the top level (queueRuns/{owner}/{date}/{employeeKey}/{startedAt}),
+// so this has to walk every date node once.
+const queueRunsSnap = await fbDB.ref('queueRuns/' + myWorkspaceOwner).once('value');
+const queueRunsUpdates = {};
+queueRunsSnap.forEach(dateNode => {
+dateNode.forEach(empNode => {
+empNode.forEach(runNode => {
+const run = runNode.val();
+if (run && run.name === oldName) {
+queueRunsUpdates['queueRuns/' + myWorkspaceOwner + '/' + dateNode.key + '/' + empNode.key + '/' + runNode.key + '/name'] = newName;
+}
+});
+});
+});
+if (Object.keys(queueRunsUpdates).length) {
+await fbDB.ref().update(queueRunsUpdates);
+}
+qm.cache = null; // force the perf view to refetch instead of showing the stale pre-merge names
+
 for (const key of ['morningRosterNames', 'eveningRosterNames']) {
 const rosterSnap = await fbDB.ref(dbPath('appData/' + key)).once('value');
 let names = [];
@@ -2416,6 +2656,188 @@ changed = true;
 if (changed) saveEmployeeListToStorage();
 })
 .catch(() => {});
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  Manual leave/day-off entry — lets the admin register إجازة/زمنية/
+//  مرضية for an employee directly, without waiting for a request from
+//  them. Writes straight into appData/leavesData, same array + shape
+//  used by approveEmployeeRequest() above, so it shows up everywhere
+//  leave history already does.
+// ═══════════════════════════════════════════════════════════════
+function populateLeaveFormEmployeeSelect() {
+const sel = document.getElementById('leaveFormEmployee');
+if (!sel) return;
+fbDB.ref(leaveCardsDbPath()).once('value').then(snap => {
+const list = snap.val();
+const employees = Array.isArray(list) ? list : (list && typeof list === 'object' ? Object.values(list) : []);
+const names = [...new Set(employees.filter(e => e && e.name).map(e => e.name))].sort((a, b) => a.localeCompare(b, 'ar'));
+const cur = sel.value;
+if (!names.length) {
+sel.innerHTML = '<option value="">لا يوجد موظفون بعد</option>';
+return;
+}
+sel.innerHTML = '<option value="">— اختر الموظف —</option>' +
+names.map(n => `<option value="${escapeHtml(n)}">${escapeHtml(n)}</option>`).join('');
+if (names.includes(cur)) sel.value = cur;
+});
+if (!document.getElementById('leaveFormDate').value) {
+document.getElementById('leaveFormDate').value = qmToday();
+}
+}
+
+function onLeaveFormTypeChange() {
+const isZmanya = document.getElementById('leaveFormType').value === 'زمنية';
+document.getElementById('leaveFormZmanyaWrap').style.display = isZmanya ? '' : 'none';
+if (isZmanya) updateZmanyaMonthlyHint();
+}
+
+// Shows how many من الساعات الشهرية للزمنية (see ZMANYA_MONTHLY_HOURS) already
+// used by the selected employee this month, so the admin doesn't need to dig
+// through the history list to check before adding more.
+function updateZmanyaMonthlyHint() {
+const hintEl = document.getElementById('leaveFormZmanyaHint');
+if (!hintEl) return;
+const name = document.getElementById('leaveFormEmployee').value;
+const dateStr = document.getElementById('leaveFormDate').value || qmToday();
+if (!name) { hintEl.textContent = `الحد الشهري للزمنية: ${ZMANYA_MONTHLY_HOURS} ساعات`; return; }
+const monthKey = dateStr.slice(0, 7);
+const usedHours = (window._leavesDataCache || [])
+.filter(r => r.emp === name && r.type === 'زمنية' && String(r.date || '').slice(0, 7) === monthKey)
+.reduce((sum, r) => sum + (Number(r.hours) || 0), 0);
+hintEl.textContent = `استُخدم ${usedHours} من ${ZMANYA_MONTHLY_HOURS} ساعات زمنية هذا الشهر لهذا الموظف`;
+hintEl.style.color = usedHours >= ZMANYA_MONTHLY_HOURS ? '#dc2626' : '#94a3b8';
+}
+
+function submitManualLeave() {
+const statusEl = document.getElementById('leaveFormStatus');
+const name = document.getElementById('leaveFormEmployee').value;
+const type = document.getElementById('leaveFormType').value;
+const date = document.getElementById('leaveFormDate').value;
+const notes = (document.getElementById('leaveFormNotes').value || '').trim();
+if (!name || !date) {
+statusEl.style.color = '#dc2626';
+statusEl.textContent = 'اختر الموظف والتاريخ أولًا.';
+return;
+}
+let zmanya_from = '', zmanya_to = '', hours = null;
+if (type === 'زمنية') {
+zmanya_from = document.getElementById('leaveFormZmanyaFrom').value || '';
+zmanya_to = document.getElementById('leaveFormZmanyaTo').value || '';
+if (zmanya_from && zmanya_to) {
+const [fh, fm] = zmanya_from.split(':').map(Number), [th, tm] = zmanya_to.split(':').map(Number);
+let diff = (th * 60 + tm) - (fh * 60 + fm);
+if (diff < 0) diff += 24 * 60;
+hours = Math.round((diff / 60) * 100) / 100;
+}
+}
+statusEl.style.color = '#475569';
+statusEl.textContent = 'جارِ الحفظ...';
+fbDB.ref(dbPath('appData/leavesData')).once('value').then(lsnap => {
+let leaves = [];
+try { leaves = JSON.parse(lsnap.val() || '[]'); } catch (e) { leaves = []; }
+leaves.push({ emp: name, date, type, notes, id: Date.now(), zmanya_from, zmanya_to, hours, sickProofImage: null, addedBy: myDisplayName || 'المشرف' });
+leaves.sort((a, b) => new Date(b.date) - new Date(a.date));
+return fbDB.ref(dbPath('appData/leavesData')).set(JSON.stringify(leaves));
+}).then(() => {
+logActivity('تسجيل إجازة/زمنية يدويًا', `${name} — ${type} — ${date}`);
+statusEl.style.color = '#16a34a';
+statusEl.textContent = 'تم التسجيل بنجاح.';
+document.getElementById('leaveFormNotes').value = '';
+document.getElementById('leaveFormZmanyaFrom').value = '';
+document.getElementById('leaveFormZmanyaTo').value = '';
+}).catch(err => {
+statusEl.style.color = '#dc2626';
+statusEl.textContent = 'تعذّر الحفظ: ' + (err && err.message ? err.message : err);
+});
+}
+
+// ═══ Full leave/day-off history — every day, every employee, filterable ═══
+let _leavesDataListenerAttached = false;
+function loadLeaveHistory() {
+if (_leavesDataListenerAttached) { renderLeaveHistory(); return; }
+_leavesDataListenerAttached = true;
+fbDB.ref(dbPath('appData/leavesData')).on('value', snap => {
+try { window._leavesDataCache = JSON.parse(snap.val() || '[]'); } catch (e) { window._leavesDataCache = []; }
+renderLeaveHistory();
+}, () => { _leavesDataListenerAttached = false; });
+}
+
+function resetLeaveHistoryFilters() {
+document.getElementById('leaveHistNameFilter').value = '';
+document.getElementById('leaveHistTypeFilter').value = 'all';
+document.getElementById('leaveHistFrom').value = '';
+document.getElementById('leaveHistTo').value = '';
+renderLeaveHistory();
+}
+
+function leaveTypeBadge(type) {
+const t = String(type || '').trim();
+const cls = (t === 'اجازة' || t === 'زمنية' || t === 'مرضية') ? t : 'other';
+const icon = t === 'اجازة' ? '🏖️' : t === 'زمنية' ? '⏰' : t === 'مرضية' ? '🤒' : '📌';
+return `<span class="leave-badge leave-badge-${cls}">${icon} ${escapeHtml(t || 'غير محدد')}</span>`;
+}
+
+function renderLeaveHistory() {
+const listEl = document.getElementById('leaveHistoryList');
+if (!listEl) return;
+const all = window._leavesDataCache || [];
+const nameQ = (document.getElementById('leaveHistNameFilter').value || '').trim();
+const typeQ = document.getElementById('leaveHistTypeFilter').value;
+const from = document.getElementById('leaveHistFrom').value;
+const to = document.getElementById('leaveHistTo').value;
+
+const filtered = all.filter(r => {
+if (nameQ && !String(r.emp || '').includes(nameQ)) return false;
+if (typeQ !== 'all' && r.type !== typeQ) return false;
+if (from && String(r.date || '') < from) return false;
+if (to && String(r.date || '') > to) return false;
+return true;
+}).sort((a, b) => new Date(b.date) - new Date(a.date));
+
+if (!filtered.length) {
+listEl.innerHTML = '<div style="text-align:center;color:#94a3b8;padding:16px;">لا توجد سجلات مطابقة</div>';
+return;
+}
+
+listEl.innerHTML = filtered.slice(0, 300).map(r => {
+const timeInfo = (r.type === 'زمنية' && r.zmanya_from && r.zmanya_to)
+? `<span style="color:#64748b;font-size:0.78rem">${escapeHtml(r.zmanya_from)} ← ${escapeHtml(r.zmanya_to)}${r.hours ? ' (' + r.hours + ' س)' : ''}</span>`
+: '';
+return `<div class="leave-row">
+<div class="leave-row-info">
+${employeeAvatarHTML(r.emp, 36)}
+<div>
+<div style="font-weight:700;color:var(--text-main)">${escapeHtml(r.emp || '—')} <span style="color:#94a3b8;font-weight:400">— ${escapeHtml(r.date || '')}</span></div>
+<div style="display:flex;align-items:center;gap:8px;margin-top:4px;flex-wrap:wrap">${leaveTypeBadge(r.type)}${timeInfo}${r.notes ? `<span style="color:#64748b;font-size:0.8rem">${escapeHtml(r.notes)}</span>` : ''}</div>
+${r.addedBy ? `<div style="font-size:0.72rem;color:#94a3b8;margin-top:2px">أضافه: ${escapeHtml(r.addedBy)}</div>` : ''}
+</div>
+</div>
+<button onclick="deleteLeaveRecord(${JSON.stringify(r.id)})" class="btn" style="padding:6px 12px;font-size:0.78rem">حذف</button>
+</div>`;
+}).join('') + (filtered.length > 300 ? `<div style="text-align:center;color:#94a3b8;font-size:0.78rem;padding:8px">عرض أحدث 300 سجل من أصل ${filtered.length} — ضيّق نطاق البحث لرؤية غيرها</div>` : '');
+}
+
+function deleteLeaveRecord(id) {
+if (!confirm('هل تريد حذف هذا السجل نهائيًا؟')) return;
+fbDB.ref(dbPath('appData/leavesData')).once('value').then(lsnap => {
+let leaves = [];
+try { leaves = JSON.parse(lsnap.val() || '[]'); } catch (e) { leaves = []; }
+const removed = leaves.find(r => r.id === id);
+leaves = leaves.filter(r => r.id !== id);
+return fbDB.ref(dbPath('appData/leavesData')).set(JSON.stringify(leaves)).then(() => {
+if (removed) logActivity('حذف سجل إجازة/زمنية', `${removed.emp} — ${removed.type} — ${removed.date}`);
+});
+}).catch(err => alert('تعذّر الحذف: ' + (err && err.message ? err.message : err)));
+}
+
+// Used by the queue-monitor cards to flag "🏖️ إجازة اليوم" / "⏰ زمنية اليوم"
+// next to an employee's name, cross-referencing the same leavesData cache.
+function getTodayLeaveBadgeForName(name) {
+if (!name) return '';
+const today = qmToday();
+const hit = (window._leavesDataCache || []).find(r => r.emp === name && r.date === today);
+return hit ? leaveTypeBadge(hit.type) : '';
 }
 
 function loadPendingEmployeeRequests() {
@@ -2959,8 +3381,10 @@ async function loadQmPerf() {
   if (!fe.value) fe.value = qmToday();
   if (!te.value) te.value = fe.value;
   let from = fe.value, to = te.value; if (from > to) [from, to] = [to, from];
+  const fullSpanDays = Math.round((Date.parse(to + 'T00:00:00Z') - Date.parse(from + 'T00:00:00Z')) / 864e5) + 1;
   const days = [];
   for (let t = Date.parse(from + 'T00:00:00Z'), e = Date.parse(to + 'T00:00:00Z'); t <= e && days.length < 31; t += 864e5) days.push(new Date(t).toISOString().slice(0, 10));
+  const rangeTruncated = fullSpanDays > days.length;
   const ck = days[0] + '_' + days.length;
   if (!qm.cache || qm.cache.key !== ck) {
     wrap.innerHTML = '<div style="text-align:center;color:#94a3b8;padding:16px;">جارِ التحميل...</div>';
@@ -2969,15 +3393,22 @@ async function loadQmPerf() {
       const runs = [];
       snaps.forEach(sn => { sn.forEach(emp => { emp.forEach(r => { runs.push({ ...r.val(), key: emp.key }); }); }); });
       // Safety net for records written before the relay's per-employee lock fix:
-      // two tabs of the same employee could each log the same real batch as its
-      // own run a few seconds/minutes apart (identical startCount, close start
-      // times). Collapse those into one before computing averages.
+      // two tabs of the same employee could each log the SAME real batch as its
+      // own run — that happens within seconds of each other (both tabs see the
+      // same 0-count report), with near-identical durations. The old check only
+      // compared startCount within a 5-minute window, which also silently
+      // swallowed genuine, distinct runs whenever an employee happened to get
+      // two same-size batches (e.g. the same fair-share number) back to back —
+      // a normal occurrence, not a duplicate report. Requiring the durations to
+      // match too (not just the start count), inside a much tighter 20-second
+      // window, makes this specific to actual duplicate reports of one event.
       runs.sort((a, b) => a.key === b.key ? a.startedAt - b.startedAt : (a.key < b.key ? -1 : 1));
       const deduped = [];
       for (const r of runs) {
         const p = deduped[deduped.length - 1];
         const dup = p && p.key === r.key && p.startCount === r.startCount &&
-          Math.abs(r.startedAt - p.startedAt) < 5 * 60 * 1000;
+          Math.abs(r.startedAt - p.startedAt) < 20 * 1000 &&
+          Math.abs((r.durationMs || 0) - (p.durationMs || 0)) < 5 * 1000;
         if (dup) { if (r.startedAt < p.startedAt) deduped[deduped.length - 1] = r; }
         else deduped.push(r);
       }
@@ -3015,10 +3446,14 @@ async function loadQmPerf() {
 <td style="${td}" title="${r.partial ? 'بداية الدورة غير مرصودة بدقة — لا تدخل في المتوسطات' : ''}">${st}${r.partial ? ' ~' : ''}</td></tr>`;
   }).join('');
   const hd = 'text-align:right;color:#64748b;font-size:0.8rem;';
-  wrap.innerHTML = `<div style="font-weight:800;margin:6px 0;">ملخص الأداء</div>
+  const rangeWarning = rangeTruncated
+    ? `<div style="background:#fef3c7;color:#92400e;border-radius:8px;padding:8px 12px;font-size:0.78rem;font-weight:700;margin-bottom:10px;">⚠️ الفترة المختارة ${fullSpanDays} يومًا، لكن يتم عرض أول 31 يومًا فقط (${days[0]} ← ${days[days.length - 1]}) — ضيّق النطاق لرؤية الأيام المتبقية.</div>`
+    : '';
+  const logTruncated = runs.length > 300;
+  wrap.innerHTML = rangeWarning + `<div style="font-weight:800;margin:6px 0;">ملخص الأداء</div>
 <div style="overflow-x:auto"><table class="table" style="width:100%;border-collapse:collapse;"><thead><tr style="${hd}"><th style="padding:8px">الموظف</th><th style="${th}">دورات</th><th style="${th}">طلبات</th><th style="${th}">متوسط الدورة</th><th style="${th}">متوسط/طلب</th><th style="${th}">أسرع</th><th style="${th}">أبطأ</th><th style="${th}">غير مكتملة</th></tr></thead><tbody>${sum}</tbody></table></div>
 <div style="font-size:0.72rem;color:#94a3b8;margin:4px 0 14px;">المتوسطات للدورات المكتملة فقط، بعد خصم وقت الاستراحة، وبدون الدورات التي لم تُرصد بدايتها (~).</div>
-<div style="font-weight:800;margin:6px 0;">سجل الدورات</div>
+<div style="font-weight:800;margin:6px 0;">سجل الدورات${logTruncated ? ` <span style="color:#b45309;font-weight:700;font-size:0.78rem;">(عرض أحدث 300 من أصل ${runs.length})</span>` : ''}</div>
 <div style="overflow-x:auto"><table class="table" style="width:100%;border-collapse:collapse;"><thead><tr style="${hd}"><th style="${th}">التاريخ</th><th style="padding:8px">الموظف</th><th style="${th}">الدوام</th><th style="${th}">بدأ</th><th style="${th}">الدورة</th><th style="${th}">المدة</th><th style="${th}">استراحة</th><th style="${th}">الحالة</th></tr></thead><tbody>${log}</tbody></table></div>`;
 }
 
@@ -3049,11 +3484,16 @@ if (el.value) pendingInputValues[el.id] = el.value;
 const activeEl = document.activeElement;
 const activeElId = (activeEl && typeof activeEl.id === 'string' && activeEl.id.indexOf('qm-') === 0) ? activeEl.id : null;
 const activeElSelectionStart = (activeElId && typeof activeEl.selectionStart === 'number') ? activeEl.selectionStart : null;
+// Same idea as the input snapshot above, but for which employee cards had
+// their ⚙️ controls panel expanded — otherwise every live refresh would
+// silently collapse it back shut while an admin is mid-edit.
+const openControlKeys = new Set();
+container.querySelectorAll('details.qm-card-controls[open]').forEach(el => { if (el.dataset.k) openControlKeys.add(el.dataset.k); });
 
 const keys = Object.keys(data).filter(k => k !== '_pool' && qmPass((data[k] && data[k].shiftStart && data[k].shiftEnd) ? data[k].shiftStart + '-' + data[k].shiftEnd : 'none', data[k] && data[k].name || k));
 const poolCount = (data._pool && typeof data._pool.count === 'number') ? data._pool.count : 0;
 
-const poolBanner = `<div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;background:var(--bg-main);border:1px solid var(--border);border-radius:8px;padding:10px 14px;">
+const poolBanner = `<div class="qm-pool-banner">
 <span style="font-weight:700;">📦 شحنات فرعي بانتظار التدقيق:</span>
 <span style="background:#fef3c7;color:#92400e;padding:2px 12px;border-radius:20px;font-weight:800;">${poolCount}</span>
 </div>`;
@@ -3089,10 +3529,17 @@ const targetLabel = (isWorking && !off && target != null)
 : '';
 
 const breakLimit = (typeof emp.breakLimitMinutes === 'number') ? emp.breakLimitMinutes : 15;
+// Bug fix: "over" used to flip true the moment mins >= breakLimit, but the
+// actual warning system (relay.js watchdog + the extension's own countdown)
+// gives a 2-minute grace period past the limit before anything is actually
+// counted as an overrun. Without matching that here, this badge showed
+// "⚠️ تجاوز" up to 2 minutes before the employee had genuinely done anything
+// wrong — an admin glancing at the dashboard could act on it prematurely.
+const QM_BREAK_GRACE_MIN = 2;
 let breakInfo = '';
 if (!isWorking && emp.breakStartedAt) {
 const mins = Math.floor((Date.now() - emp.breakStartedAt) / 60000);
-const over = mins >= breakLimit && !off;
+const over = mins >= breakLimit + QM_BREAK_GRACE_MIN && !off;
 breakInfo = `<div style="font-size:0.75rem;margin-top:2px;color:${over ? '#dc2626' : '#64748b'};font-weight:${over ? '800' : '400'}">
 ${over ? `⚠️ تجاوز ${breakLimit} دقيقة — ` : ''}منذ ${mins} دقيقة <span style="color:#94a3b8;">(الحد: ${breakLimit}د)</span>
 </div>`;
@@ -3152,64 +3599,69 @@ const warnBadge = warnCount > 0
 ? `<span title="${escapeHtml(warningTooltip)}" style="cursor:help;background:${overEval ? '#fecaca' : '#fee2e2'};color:${overEval ? '#7f1d1d' : '#b91c1c'};padding:2px 12px;border-radius:20px;font-weight:800;font-size:0.85rem;">⚠️ ${warnCount}</span>${overEval ? '<div style="font-size:0.7rem;color:#b91c1c;margin-top:2px;font-weight:700;">تنزيل تقييم</div>' : ''}`
 : '<span style="color:#94a3b8;font-size:0.85rem;">—</span>';
 
+const todayLeaveBadge = getTodayLeaveBadgeForName(name);
+
 return `
-<tr>
-<td style="font-weight:700;cursor:pointer;color:var(--accent);" data-k="${escapeHtml(key)}" data-n="${escapeHtml(name)}" onclick="openSessionLog(this.dataset.k,this.dataset.n)" title="عرض سجل أوقات العمل والاستراحة">${escapeHtml(name)}${posLabel}</td>
-<td style="text-align:center"><span style="background:${count > 0 ? '#eff6ff' : '#f1f5f9'};color:${count > 0 ? '#2563eb' : '#94a3b8'};padding:2px 12px;border-radius:20px;font-weight:800;font-size:0.85rem;">${count}</span>${targetLabel}${qmRunLabel(emp, count)}</td>
-<td>${statusBadge}${breakInfo}${forceBadge}${shiftLabel}${overtimeLabel}</td>
-<td style="text-align:center">${warnBadge}</td>
-<td style="color:#64748b;font-size:0.82rem;">${lastUpdate}</td>
-<td>
+<div class="qm-card">
+<div class="qm-card-head">
+<div>
+<div class="qm-card-name" data-k="${escapeHtml(key)}" data-n="${escapeHtml(name)}" onclick="openSessionLog(this.dataset.k,this.dataset.n)" title="عرض سجل أوقات العمل والاستراحة">${escapeHtml(name)}</div>
+<div class="qm-card-badges" style="margin-top:4px">${todayLeaveBadge}${posLabel}${targetLabel}</div>
+</div>
+<span class="qm-card-count${count > 0 ? ' has-orders' : ''}">${count} طلب</span>
+</div>
+
+<div class="qm-card-badges">
+${statusBadge}
+<span style="color:#64748b;font-size:0.78rem;">🕒 آخر تحديث: ${lastUpdate}</span>
+</div>
+
+<div class="qm-card-meta">
+${breakInfo}${forceBadge}${shiftLabel}${overtimeLabel}${qmRunLabel(emp, count)}
+</div>
+
+<div class="qm-card-warn">
+<span style="font-size:0.78rem;color:#64748b;">الإنذارات:</span> ${warnBadge}
+${warnCount > 0 ? `<button class="btn" style="padding:4px 10px;font-size:0.74rem;" onclick="resetEmployeeWarnings('${key}')" title="تصفير كل الإنذارات (التلقائية واليدوية) وسجلّها">🧹 تصفير</button>` : ''}
+</div>
+
+<details class="qm-card-controls" data-k="${escapeHtml(key)}" ${openControlKeys.has(key) ? 'open' : ''}>
+<summary>التحكم اليدوي</summary>
+<div class="qm-card-controls-body">
+<div class="qm-actions-row">
 <button class="btn" style="padding:5px 10px;font-size:0.78rem;" onclick="forceEmployeeState('${key}','working')">إجبار عمل</button>
 <button class="btn" style="padding:5px 10px;font-size:0.78rem;" onclick="forceEmployeeState('${key}','break')">إجبار استراحة</button>
 <button class="btn" style="padding:5px 10px;font-size:0.78rem;background:${adminForce === 'ended' ? '#475569' : ''};color:${adminForce === 'ended' ? '#fff' : ''};" onclick="if(confirm('إنهاء الدوام لهذا الموظف؟ لن يتمكن من العودة للعمل حتى تُلغي الإجبار.')) forceEmployeeState('${key}','ended')" title="يوقفه عن العمل ويمنعه من الضغط على بدء العمل حتى تُلغي الإجبار">⏹️ إنهاء الدوام</button>
 <button class="btn" style="padding:5px 10px;font-size:0.78rem;background:${adminForce === 'maintenance' ? '#dc2626' : ''};color:${adminForce === 'maintenance' ? '#fff' : ''};" onclick="forceEmployeeState('${key}','maintenance')" title="علامة/تنبيه فقط — لا يمنع الموظف من العمل فعليًا">🔧 صيانة</button>
 ${adminForce ? `<button class="btn" style="padding:5px 10px;font-size:0.78rem;" onclick="forceEmployeeState('${key}',null)">إلغاء الإجبار</button>` : ''}
-${warnCount > 0 ? `<button class="btn" style="padding:5px 10px;font-size:0.78rem;" onclick="resetEmployeeWarnings('${key}')" title="تصفير كل الإنذارات (التلقائية واليدوية) وسجلّها">🧹 تصفير الإنذارات</button>` : ''}
-<div style="margin-top:6px;display:flex;align-items:center;gap:4px;" title="مدة الاستراحة بالدقائق لهذا الموظف">
-<input id="qm-breaklimit-input-${key}" type="number" min="1" placeholder="${breakLimit}"
-style="width:64px;padding:3px 6px;border-radius:6px;border:1px solid var(--border);font-size:0.78rem;">
+</div>
+<div class="qm-input-row" title="مدة الاستراحة بالدقائق لهذا الموظف">
+<input id="qm-breaklimit-input-${key}" type="number" min="1" placeholder="${breakLimit}" style="width:64px">
 <button class="btn" style="padding:4px 8px;font-size:0.75rem;" onclick="setBreakLimit('${key}')">⏱️ وقت الاستراحة</button>
 </div>
-<div style="margin-top:6px;display:flex;align-items:center;gap:4px;" title="بداية ونهاية الدوام لهذا الموظف — خارج هذه الفترة لا تُحتسب استراحة/تحذيرات، وأي عمل فعلي يُسجَّل كإضافي">
-<input id="qm-shiftstart-input-${key}" type="time" value="${shiftStart}"
-style="padding:3px 6px;border-radius:6px;border:1px solid var(--border);font-size:0.78rem;">
+<div class="qm-input-row" title="بداية ونهاية الدوام لهذا الموظف — خارج هذه الفترة لا تُحتسب استراحة/تحذيرات، وأي عمل فعلي يُسجَّل كإضافي">
+<input id="qm-shiftstart-input-${key}" type="time" value="${shiftStart}">
 <span style="color:#94a3b8;font-size:0.75rem;">←</span>
-<input id="qm-shiftend-input-${key}" type="time" value="${shiftEnd}"
-style="padding:3px 6px;border-radius:6px;border:1px solid var(--border);font-size:0.78rem;">
+<input id="qm-shiftend-input-${key}" type="time" value="${shiftEnd}">
 <button class="btn" style="padding:4px 8px;font-size:0.75rem;" onclick="setEmployeeShift('${key}')">🕒 حفظ الدوام</button>
 </div>
-<div style="margin-top:6px;display:flex;align-items:center;gap:4px;">
-<input id="qm-popup-input-${key}" type="text" placeholder="رسالة فورية..."
-style="width:120px;padding:3px 6px;border-radius:6px;border:1px solid var(--border);font-size:0.78rem;">
+<div class="qm-input-row">
+<input id="qm-popup-input-${key}" type="text" placeholder="رسالة فورية...">
 <button class="btn" style="padding:4px 8px;font-size:0.75rem;" onclick="sendEmployeePopup('${key}')">📢 إرسال</button>
 </div>
-<div style="margin-top:6px;display:flex;align-items:center;gap:4px;" title="إضافة إنذار لهذا الموظف — يُضاف لنفس عداد الإنذارات التلقائية، ويظهر سببه عند تمرير الفأرة فوق الشارة">
-<input id="qm-warning-input-${key}" type="text" placeholder="سبب الإنذار (اختياري)..."
-style="width:120px;padding:3px 6px;border-radius:6px;border:1px solid var(--border);font-size:0.78rem;">
+<div class="qm-input-row" title="إضافة إنذار لهذا الموظف — يُضاف لنفس عداد الإنذارات التلقائية، ويظهر سببه عند تمرير الفأرة فوق الشارة">
+<input id="qm-warning-input-${key}" type="text" placeholder="سبب الإنذار (اختياري)...">
 <button class="btn" style="padding:4px 8px;font-size:0.75rem;background:#fef3c7;color:#92400e;" onclick="addEmployeeWarning('${key}')">⚠️ إضافة إنذار</button>
 </div>
-</td>
-</tr>`;
+</div>
+</details>
+</div>`;
 }).join('');
 
-container.innerHTML = poolBanner + `
-<table class="table" style="width:100%;border-collapse:collapse;">
-<thead>
-<tr style="text-align:right;color:#64748b;font-size:0.8rem;">
-<th style="padding:8px">الموظف</th>
-<th style="padding:8px;text-align:center">طلبات تحت التدقيق</th>
-<th style="padding:8px">الحالة</th>
-<th style="padding:8px;text-align:center">الإنذارات</th>
-<th style="padding:8px">آخر تحديث</th>
-<th style="padding:8px">تحكم يدوي</th>
-</tr>
-</thead>
-<tbody>${rows}</tbody>
-</table>`;
+container.innerHTML = poolBanner + `<div class="qm-grid">${rows}</div>`;
 
-// Restore whatever was snapshotted above — the row/column layout is the
-// same each render, so the same ids exist on the freshly created inputs.
+// Restore whatever was snapshotted above — the card layout is the same
+// each render, so the same ids exist on the freshly created inputs.
 Object.keys(pendingInputValues).forEach(id => {
 const el = document.getElementById(id);
 if (el) el.value = pendingInputValues[id];
