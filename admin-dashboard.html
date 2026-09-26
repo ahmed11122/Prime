@@ -3695,6 +3695,11 @@ ${todayLeaveRecord ? `<button class="btn" style="padding:5px 10px;font-size:0.78
 <input id="qm-popup-input-${key}" type="text" placeholder="رسالة فورية...">
 <button class="btn" style="padding:4px 8px;font-size:0.75rem;" onclick="sendEmployeePopup('${key}')">📢 إرسال</button>
 </div>
+${emp.popup && emp.popup.id
+? `<div style="font-size:0.72rem;color:#b45309;margin:2px 0 6px;" title="${escapeHtml(emp.popup.text || '')}">⏳ بانتظار القراءة: «${escapeHtml((emp.popup.text || '').slice(0, 40))}${(emp.popup.text || '').length > 40 ? '…' : ''}»</div>`
+: (emp.lastPopupAck && emp.lastPopupAck.ackedAt
+? `<div style="font-size:0.72rem;color:#16a34a;margin:2px 0 6px;" title="${escapeHtml(emp.lastPopupAck.text || '')}">✅ قُرئت الساعة ${new Date(emp.lastPopupAck.ackedAt).toLocaleTimeString('ar-IQ')}</div>`
+: '')}
 <div class="qm-input-row" title="إضافة إنذار لهذا الموظف — يُضاف لنفس عداد الإنذارات التلقائية، ويظهر سببه عند تمرير الفأرة فوق الشارة">
 <input id="qm-warning-input-${key}" type="text" placeholder="سبب الإنذار (اختياري)...">
 <button class="btn" style="padding:4px 8px;font-size:0.75rem;background:#fef3c7;color:#92400e;" onclick="addEmployeeWarning('${key}')">⚠️ إضافة إنذار</button>
