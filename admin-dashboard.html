@@ -3277,8 +3277,18 @@ const EXTENSION_FEATURES = [
 // Firebase RTDB keys can't contain . # $ [ ] / — sanitize the same
 // way the relay does (see sanitizeNameKey in relay.js) so both sides
 // always agree on the same key for a given employee name.
+// Bug fix (duplicate employee cards): this used to only swap out Firebase-
+// illegal characters, with no trim/whitespace-collapse/case-fold — so a
+// name read with a stray trailing space or different casing landed on a
+// different key than usual, orphaning the old key's queueMonitor node and
+// showing the same employee twice. Now matches relay.js's deriveNameKey()
+// exactly, so both sides keep agreeing on one key per employee regardless
+// of that drift. See deriveNameKey() in relay.js for the full story.
 function sanitizeNameKey(name) {
-  return String(name).replace(/[.#$\[\]\/]/g, '_');
+  const normalized = typeof name === 'string'
+    ? name.trim().toLowerCase().replace(/\s+/g, ' ')
+    : String(name || '');
+  return normalized.replace(/[.#$\[\]\/]/g, '_');
 }
 
 // ═══ Live Queue Monitor ═══
