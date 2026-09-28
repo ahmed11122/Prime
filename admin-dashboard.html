@@ -3284,19 +3284,11 @@ const EXTENSION_FEATURES = [
 // showing the same employee twice. Now matches relay.js's deriveNameKey()
 // exactly, so both sides keep agreeing on one key per employee regardless
 // of that drift. See deriveNameKey() in relay.js for the full story.
-function sanitizeNameKey(rawName) {
-  // Strips invisible/bidi chars, tatweel, tashkeel and unifies Arabic letter
-  // variants so the same person always maps to ONE Firebase key.
-  // Must match sanitizeNameKey() in the admin dashboard.
-  let s = String(rawName == null ? "" : rawName);
-  s = s.normalize("NFKC")
-       .replace(/[\u200B-\u200F\u202A-\u202E\u2066-\u2069\u061C\uFEFF\u00A0]/g, " ")
-       .replace(/\u0640/g, "")
-       .replace(/[\u064B-\u065F\u0670]/g, "")
-       .replace(/[يىی]/g, "ي")
-       .replace(/[كک]/g, "ك")
-       .trim().toLowerCase().replace(/\s+/g, " ");
-  return s.replace(/[.#$\[\]/]/g, "_");
+function sanitizeNameKey(name) {
+  const normalized = typeof name === 'string'
+    ? name.trim().toLowerCase().replace(/\s+/g, ' ')
+    : String(name || '');
+  return normalized.replace(/[.#$\[\]\/]/g, '_');
 }
 
 // ═══ Live Queue Monitor ═══
@@ -3550,7 +3542,7 @@ function renderQueueMonitorTable(data) {
 const container = document.getElementById('queueMonitorList');
 if (!container) return;
 window._qmData = data;
-qmFillShifts(Object.keys(data).filter(k => k !== '_pool').map(k => (data[k] && data[k].shiftStart && data[k].shiftEnd) ? data[k].shiftStart + '-' + data[k].shiftEnd : 'none'));
+qmFillShifts(Object.keys(data).filter(k => k !== '_pool' && k !== '_activeBreak').map(k => (data[k] && data[k].shiftStart && data[k].shiftEnd) ? data[k].shiftStart + '-' + data[k].shiftEnd : 'none'));
 
 // Bug fix: this is called from a listener on the WHOLE queueMonitor/{owner}
 // node (see loadQueueMonitor above), so it re-runs on any change to ANY
@@ -3579,7 +3571,7 @@ const activeElSelectionStart = (activeElId && typeof activeEl.selectionStart ===
 const openControlKeys = new Set();
 container.querySelectorAll('details.qm-card-controls[open]').forEach(el => { if (el.dataset.k) openControlKeys.add(el.dataset.k); });
 
-const keys = Object.keys(data).filter(k => k !== '_pool' && qmPass((data[k] && data[k].shiftStart && data[k].shiftEnd) ? data[k].shiftStart + '-' + data[k].shiftEnd : 'none', data[k] && data[k].name || k));
+const keys = Object.keys(data).filter(k => k !== '_pool' && k !== '_activeBreak' && qmPass((data[k] && data[k].shiftStart && data[k].shiftEnd) ? data[k].shiftStart + '-' + data[k].shiftEnd : 'none', data[k] && data[k].name || k));
 const poolCount = (data._pool && typeof data._pool.count === 'number') ? data._pool.count : 0;
 
 const poolBanner = `<div class="qm-pool-banner">
