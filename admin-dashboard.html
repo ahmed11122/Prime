@@ -3635,7 +3635,7 @@ const remainingTodayMin = (typeof emp.breakBudgetRemainingMs === 'number')
 ? Math.max(0, Math.round(emp.breakBudgetRemainingMs / 60000))
 : null;
 breakInfo = `<div style="font-size:0.75rem;margin-top:2px;color:${over ? '#dc2626' : '#64748b'};font-weight:${over ? '800' : '400'}">
-${over ? `⚠️ تجاوز ${sessionLimitMin} دقيقة — ` : ''}منذ ${mins} دقيقة <span style="color:#94a3b8;">(هذه الجلسة: ${sessionLimitMin}د${remainingTodayMin !== null ? ` · الرصيد الكلي اليوم: ${remainingTodayMin}د` : ''})</span>
+${over ? `⚠️ تجاوز ${sessionLimitMin} دقيقة — ` : ''}منذ ${mins} دقيقة <span style="color:#94a3b8;">(هذه الجلسة: ${sessionLimitMin}د${remainingTodayMin !== null ? ` · الرصيد المتبقي اليوم: ${remainingTodayMin}د` : ''})</span>
 </div>`;
 }
 
