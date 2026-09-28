@@ -3284,11 +3284,19 @@ const EXTENSION_FEATURES = [
 // showing the same employee twice. Now matches relay.js's deriveNameKey()
 // exactly, so both sides keep agreeing on one key per employee regardless
 // of that drift. See deriveNameKey() in relay.js for the full story.
-function sanitizeNameKey(name) {
-  const normalized = typeof name === 'string'
-    ? name.trim().toLowerCase().replace(/\s+/g, ' ')
-    : String(name || '');
-  return normalized.replace(/[.#$\[\]\/]/g, '_');
+function sanitizeNameKey(rawName) {
+  // Strips invisible/bidi chars, tatweel, tashkeel and unifies Arabic letter
+  // variants so the same person always maps to ONE Firebase key.
+  // Must match sanitizeNameKey() in the admin dashboard.
+  let s = String(rawName == null ? "" : rawName);
+  s = s.normalize("NFKC")
+       .replace(/[\u200B-\u200F\u202A-\u202E\u2066-\u2069\u061C\uFEFF\u00A0]/g, " ")
+       .replace(/\u0640/g, "")
+       .replace(/[\u064B-\u065F\u0670]/g, "")
+       .replace(/[يىی]/g, "ي")
+       .replace(/[كک]/g, "ك")
+       .trim().toLowerCase().replace(/\s+/g, " ");
+  return s.replace(/[.#$\[\]/]/g, "_");
 }
 
 // ═══ Live Queue Monitor ═══
