@@ -3733,6 +3733,7 @@ ${adminForce ? `<button class="btn" style="padding:5px 10px;font-size:0.78rem;" 
 <div class="qm-input-row" title="إجمالي رصيد الاستراحة بالدقائق لهذا الموظف لكل يوم (وليس مدة كل ضغطة — الموظف يستهلك من نفس الرصيد على عدة ضغطات ويكمل من حيث توقف)">
 <input id="qm-breaklimit-input-${key}" type="number" min="1" placeholder="${breakLimit}" style="width:64px">
 <button class="btn" style="padding:4px 8px;font-size:0.75rem;" onclick="setBreakLimit('${key}')">⏱️ رصيد الاستراحة اليومي</button>
+<button class="btn" style="padding:4px 8px;font-size:0.75rem;" title="يعيد الرصيد المتبقي اليوم لهذا الموظف إلى الحد الكامل" onclick="resetEmployeeBreakBudget('${key}')">🔄 تصفير الاستهلاك</button>
 </div>
 <div class="qm-input-row" title="بداية ونهاية الدوام لهذا الموظف — خارج هذه الفترة لا تُحتسب استراحة/تحذيرات، وأي عمل فعلي يُسجَّل كإضافي">
 <input id="qm-shiftstart-input-${key}" type="time" value="${shiftStart}">
@@ -3847,6 +3848,17 @@ const n = parseInt(input.value, 10);
 if (isNaN(n) || n <= 0) { alert('أدخل عدد دقائق صحيح'); return; }
 queueMonitorRef().child(employeeKey).update({ breakLimitMinutes: n })
 .then(() => { input.value = ''; })
+.catch(err => alert('فشل تنفيذ الأمر: ' + err.message));
+}
+
+// Restores an employee's remaining استراحة balance for today back to the full
+// daily limit. Like resetWarningsAt, the extension owns the live balance and
+// re-reports it constantly, so a direct write to breakBudgetRemainingMs would
+// be overwritten — instead we stamp resetBreakBudgetAt and the extension
+// (pollAdminForce) applies it once when it sees a newer timestamp.
+function resetEmployeeBreakBudget(employeeKey) {
+if (!confirm('تصفير استهلاك الاستراحة لهذا الموظف وإرجاع رصيده المتبقي اليوم إلى الحد الكامل؟')) return;
+queueMonitorRef().child(employeeKey).update({ resetBreakBudgetAt: Date.now() })
 .catch(err => alert('فشل تنفيذ الأمر: ' + err.message));
 }
 
