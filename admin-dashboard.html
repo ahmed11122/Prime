@@ -3521,7 +3521,7 @@ async function loadQmPerf() {
     const st = r.status === 'completed' ? '✅' : `⚠️ متبقي ${r.remaining || 0}`;
     return `<tr><td style="${td}">${r.dateKey || ''}</td><td style="font-weight:700;padding:6px;">${escapeHtml(r.name || r.key)}</td>
 <td style="${td};font-size:0.78rem;">${r.shift ? escapeHtml(r.shift) : '—'}</td>
-<td style="${td}">${new Date(r.startedAt).toLocaleTimeString('ar-IQ', { hour: '2-digit', minute: '2-digit' })}</td>
+<td style="${td}">${new Date(r.startedAt).toLocaleTimeString('ar-IQ-u-nu-latn', { hour: '2-digit', minute: '2-digit' })}</td>
 <td style="${td}"><b>${r.startCount}</b>${r.taken > r.startCount ? ' (+' + (r.taken - r.startCount) + ')' : ''} ← 0</td>
 <td style="${td}">${qmDur(r.durationMs || 0)}</td><td style="${td};color:#94a3b8;">${r.breakMs ? qmDur(r.breakMs) : '—'}</td>
 <td style="${td}" title="${r.partial ? 'بداية الدورة غير مرصودة بدقة — لا تدخل في المتوسطات' : ''}">${st}${r.partial ? ' ~' : ''}</td></tr>`;
@@ -3601,7 +3601,7 @@ const adminForce = emp.adminForce || null;
 const off = qmOffShift(emp);
 const target = (typeof emp.targetAssign === 'number') ? emp.targetAssign : null;
 const isManual = !!emp.manualTarget;
-const lastUpdate = emp.lastUpdate ? new Date(emp.lastUpdate).toLocaleTimeString('ar-IQ') : '—';
+const lastUpdate = emp.lastUpdate ? new Date(emp.lastUpdate).toLocaleTimeString('ar-IQ-u-nu-latn') : '—';
 
 const onLeaveToday = qmIsOnLeaveToday(name);
 if (isWorking && !off && !onLeaveToday) queuePosition++;
@@ -3684,7 +3684,7 @@ const warningEntries = emp.warnings ? Object.values(emp.warnings) : [];
 warningEntries.sort((a, b) => (a && a.createdAt || 0) - (b && b.createdAt || 0));
 const warningTooltip = warningEntries.length
 ? warningEntries.map(w => {
-const when = w && w.createdAt ? new Date(w.createdAt).toLocaleString('ar-IQ') : '—';
+const when = w && w.createdAt ? new Date(w.createdAt).toLocaleString('ar-IQ-u-nu-latn') : '—';
 const reason = (w && w.text) ? w.text : ((w && w.source === 'auto') ? 'تجاوز وقت الاستراحة' : 'بدون سبب مذكور');
 return when + ' — ' + reason;
 }).join('\n')
@@ -3753,7 +3753,7 @@ ${todayLeaveRecord ? `<button class="btn" style="padding:5px 10px;font-size:0.78
 ${emp.popup && emp.popup.id
 ? `<div style="font-size:0.72rem;color:#b45309;margin:2px 0 6px;" title="${escapeHtml(emp.popup.text || '')}">⏳ بانتظار القراءة: «${escapeHtml((emp.popup.text || '').slice(0, 40))}${(emp.popup.text || '').length > 40 ? '…' : ''}»</div>`
 : (emp.lastPopupAck && emp.lastPopupAck.ackedAt
-? `<div style="font-size:0.72rem;color:#16a34a;margin:2px 0 6px;" title="${escapeHtml(emp.lastPopupAck.text || '')}">✅ قُرئت الساعة ${new Date(emp.lastPopupAck.ackedAt).toLocaleTimeString('ar-IQ')}</div>`
+? `<div style="font-size:0.72rem;color:#16a34a;margin:2px 0 6px;" title="${escapeHtml(emp.lastPopupAck.text || '')}">✅ قُرئت الساعة ${new Date(emp.lastPopupAck.ackedAt).toLocaleTimeString('ar-IQ-u-nu-latn')}</div>`
 : '')}
 <div class="qm-input-row" title="إضافة إنذار لهذا الموظف — يُضاف لنفس عداد الإنذارات التلقائية، ويظهر سببه عند تمرير الفأرة فوق الشارة">
 <input id="qm-warning-input-${key}" type="text" placeholder="سبب الإنذار (اختياري)...">
@@ -3821,8 +3821,8 @@ return;
 
 list.innerHTML = sessions.map(s => {
 const isWork = s.type === 'work';
-const start = s.startedAt ? new Date(s.startedAt).toLocaleString('ar-IQ') : '—';
-const end = s.endedAt ? new Date(s.endedAt).toLocaleTimeString('ar-IQ') : 'جارٍ الآن';
+const start = s.startedAt ? new Date(s.startedAt).toLocaleString('ar-IQ-u-nu-latn') : '—';
+const end = s.endedAt ? new Date(s.endedAt).toLocaleTimeString('ar-IQ-u-nu-latn') : 'جارٍ الآن';
 const dur = s.endedAt && s.startedAt ? formatSessionDuration(s.endedAt - s.startedAt) : '—';
 return `<div style="padding:10px 12px;border-bottom:1px solid #f0f1f4;display:flex;justify-content:space-between;align-items:center;gap:10px;">
 <div style="font-size:0.82rem;line-height:1.6;">
