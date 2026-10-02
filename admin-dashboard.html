@@ -1172,21 +1172,21 @@ return {
 matabaa: p.systems.matabaa || 'none', hr: p.systems.hr || 'none', manager: p.systems.manager || 'none',
 accounts: p.systems.accounts || 'none', admin: p.systems.admin || 'none', sales: p.systems.sales || 'none',
 departments: p.systems.departments || 'none', badala: p.systems.badala || 'none', tickets: p.systems.tickets || 'none', team: p.systems.team || 'none',
-orderMapping: p.systems.orderMapping || 'none',
+orderMapping: p.systems.orderMapping || 'none', queueMonitor: p.systems.queueMonitor || 'none',
 selfService: !!p.selfService, employeeName: p.employeeName || '', employeeCardId: p.employeeCardId || ''
 };
 }
 if (p.role === 'employee') {
-return { matabaa: 'none', hr: 'none', manager: 'none', accounts: 'none', admin: 'none', sales: 'none', departments: 'none', badala: 'none', tickets: 'none', team: 'none', orderMapping: 'none', selfService: true, employeeName: p.employeeName || p.name || '', employeeCardId: p.employeeCardId || '' };
+return { matabaa: 'none', hr: 'none', manager: 'none', accounts: 'none', admin: 'none', sales: 'none', departments: 'none', badala: 'none', tickets: 'none', team: 'none', orderMapping: 'none', queueMonitor: 'none', selfService: true, employeeName: p.employeeName || p.name || '', employeeCardId: p.employeeCardId || '' };
 }
 if (p.role === 'manager') {
-return { matabaa: 'none', hr: 'none', manager: p.canApprove ? 'approve' : 'view', accounts: 'none', admin: 'none', sales: 'none', departments: 'none', badala: 'none', tickets: 'none', team: 'none', orderMapping: 'none', selfService: false, employeeName: '' };
+return { matabaa: 'none', hr: 'none', manager: p.canApprove ? 'approve' : 'view', accounts: 'none', admin: 'none', sales: 'none', departments: 'none', badala: 'none', tickets: 'none', team: 'none', orderMapping: 'none', queueMonitor: 'none', selfService: false, employeeName: '' };
 }
 const tabVals = Object.values(p.tabs || {});
 const matabaa = tabVals.includes('edit') ? 'edit' : (tabVals.includes('view') ? 'view' : 'none');
 const accounts = p.accountsAccessLevel || (p.canAccessAccounts ? 'edit' : 'none');
 const hr = p.canAccessHR ? 'full' : 'none';
-return { matabaa, hr, manager: 'none', accounts, admin: p.isAdmin ? 'edit' : 'none', sales: p.systems && p.systems.sales || 'none', departments: p.systems && p.systems.departments || 'none', badala: p.systems && p.systems.badala || 'none', tickets: p.systems && p.systems.tickets || 'none', team: p.systems && p.systems.team || 'none', orderMapping: p.systems && p.systems.orderMapping || 'none', selfService: false, employeeName: '', employeeCardId: '' };
+return { matabaa, hr, manager: 'none', accounts, admin: p.isAdmin ? 'edit' : 'none', sales: p.systems && p.systems.sales || 'none', departments: p.systems && p.systems.departments || 'none', badala: p.systems && p.systems.badala || 'none', tickets: p.systems && p.systems.tickets || 'none', team: p.systems && p.systems.team || 'none', orderMapping: p.systems && p.systems.orderMapping || 'none', queueMonitor: p.systems && p.systems.queueMonitor || 'none', selfService: false, employeeName: '', employeeCardId: '' };
 }
 
 function systemsRoleLabel(sys, isAdminAcct) {
@@ -1209,6 +1209,7 @@ else if (sys.tickets !== 'none') parts.push('التذاكر (موظف — قسم
 if (sys.team === 'leader') parts.push('إدارة الفريق (رئيس فريق)');
 else if (sys.team !== 'none') parts.push('إدارة الفريق (موظف)');
 if (sys.orderMapping !== 'none') parts.push('مطابقة الطلبات (' + (sys.orderMapping === 'edit' ? 'مطابقة وتعديل' : 'عرض فقط') + ')');
+if (sys.queueMonitor !== 'none') parts.push('متابعة الطلبات المباشرة (' + (sys.queueMonitor === 'edit' ? 'عرض وتحكم' : 'عرض فقط') + ')');
 if (sys.admin === 'edit') parts.push('لوحة المشرف — يرى تذاكر كل الأقسام');
 return parts.length ? parts.join(' | ') : 'بدون أي صلاحية نظام بعد';
 }
@@ -1458,6 +1459,11 @@ ${teamLeaders.map(l => `<option value="${l.uid}" ${p.teamLeaderUid===l.uid?'sele
 <option value="none" ${sys.orderMapping==='none'?'selected':''}>مطابقة الطلبات: بدون</option>
 <option value="view" ${sys.orderMapping==='view'?'selected':''}>مطابقة الطلبات: عرض فقط</option>
 <option value="edit" ${sys.orderMapping==='edit'?'selected':''}>مطابقة الطلبات: مطابقة وتعديل</option>
+</select>
+<select onchange="setMemberSystem('${uid}', 'queueMonitor', this.value)" style="padding:4px;font-size:0.74rem;" title="متابعة الطلبات المباشرة — عرض فقط: يشاهد البطاقات والأداء ويصدّر البيانات. عرض وتحكم: يضيف إجبار عمل/استراحة، إنذارات، رسائل، دوام، إجازات من بطاقة الموظف">
+<option value="none" ${sys.queueMonitor==='none'?'selected':''}>متابعة الطلبات المباشرة: بدون</option>
+<option value="view" ${sys.queueMonitor==='view'?'selected':''}>متابعة الطلبات المباشرة: عرض فقط</option>
+<option value="edit" ${sys.queueMonitor==='edit'?'selected':''}>متابعة الطلبات المباشرة: عرض وتحكم</option>
 </select>
 <select onchange="setMemberSystem('${uid}', 'admin', this.value)" style="padding:4px;font-size:0.74rem;" title="لوحة المشرف — يمنحه أيضاً رؤية تذاكر كل الأقسام في نظام التذاكر">
 <option value="none" ${sys.admin==='none'?'selected':''}>المشرف: بدون</option>

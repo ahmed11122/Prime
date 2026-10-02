@@ -1119,6 +1119,10 @@ body.dark-theme #targetEvening { background: #263447 !important; color: #e2e8f0 
       <div class="clay-sys-title">مطابقة الطلبات (تتبع من أجهزة الموظفين)</div>
       <div class="clay-sys-desc">مطابقة أسماء نظام الشركة بموظفي متابعة، وعدّاد الطلبات المُعالجة من كل جهاز</div>
     </button>
+    <button id="queueMonitorSystemBtn" onclick="chooseQueueMonitorSystem()" class="clay-sys-card clay-accent-green" style="display:none">
+      <div class="clay-sys-title">متابعة الطلبات المباشرة</div>
+      <div class="clay-sys-desc">عدد الطلبات تحت التدقيق لكل موظف لحظيًا، حالة العمل والاستراحة، الإنذارات، وأداء الدورات</div>
+    </button>
     <button id="selfServiceSystemBtn" onclick="chooseSelfServicePortal()" class="clay-sys-card clay-accent-purple" style="display:none">
       <div class="clay-sys-title">بوابة ذاتية</div>
       <div class="clay-sys-desc">تقديم طلبات الإجازة والزمنية، ومتابعة رصيدك وحالة طلباتك الخاصة</div>
@@ -1342,6 +1346,19 @@ img.ai-fab-icon { width: 30px; height: 30px; border-radius: 50%; object-fit: cov
 </div>
 
 <!-- ══════════════════════════════════════════════════════════ -->
+<!--  QUEUE MONITOR (متابعة الطلبات المباشرة) APP — loaded in an iframe -->
+<!--  so it stays fully isolated from the متابعة app's code and styles  -->
+<!-- ══════════════════════════════════════════════════════════ -->
+<div id="queueMonitorScreen" style="display:none;position:fixed;inset:0;z-index:9000;background:var(--bg);flex-direction:column">
+  <div class="iframe-hdr" dir="rtl">
+    <button class="iframe-hdr-back" onclick="backToChooserFromQueueMonitor()">رجوع لاختيار النظام</button>
+    <div class="iframe-hdr-title">📦 متابعة الطلبات المباشرة</div>
+    <span id="queueMonitorHeaderUserName" class="iframe-hdr-user" style="display:none"></span>
+  </div>
+  <iframe id="queueMonitorIframe" src="" style="border:none;flex:1;width:100%"></iframe>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════ -->
 <!--  BADALA (البدالات) APP — loaded in an iframe so it stays -->
 <!--  fully isolated from the متابعة app's code and styles        -->
 <!-- ══════════════════════════════════════════════════════════ -->
@@ -1410,6 +1427,7 @@ function showSystemChooser(fn) {
   applyBadalaButtonState();
   applyTeamButtonState();
   applyOrderMappingButtonState();
+  applyQueueMonitorButtonState();
   applySelfServiceButtonState();
   // Ask for notification permission right away, as soon as the user logs
   // in — instead of waiting until they pick "نظام قسم المتابعة".
@@ -1436,6 +1454,7 @@ function showSystemChooser(fn) {
       team: () => (isAdmin || mySystems.team !== 'none') && chooseTeamSystem(),
       badala: () => (isAdmin || mySystems.badala !== 'none') && chooseBadalaSystem(),
       orderMapping: () => (isAdmin || mySystems.orderMapping !== 'none') && chooseOrderMappingSystem(),
+      queueMonitor: () => (isAdmin || mySystems.queueMonitor !== 'none') && chooseQueueMonitorSystem(),
       admin: () => canUseAdminDashboard() && chooseAdminDashboard(),
       selfService: () => mySystems.selfService && chooseSelfServicePortal()
     };
@@ -1517,6 +1536,14 @@ function applyOrderMappingButtonState() {
   const btn = document.getElementById('orderMappingSystemBtn');
   if (!btn) return;
   btn.style.display = (isAdmin || mySystems.orderMapping !== 'none') ? '' : 'none';
+}
+
+// متابعة الطلبات المباشرة — shown to admins always; for regular staff, only if
+// the admin panel explicitly granted them 'view' or 'edit' queueMonitor access.
+function applyQueueMonitorButtonState() {
+  const btn = document.getElementById('queueMonitorSystemBtn');
+  if (!btn) return;
+  btn.style.display = (isAdmin || mySystems.queueMonitor !== 'none') ? '' : 'none';
 }
 
 // 👤 بوابة ذاتية — the employee's own self-service portal (leave/زمنية
@@ -1817,6 +1844,43 @@ function chooseOrderMappingSystem() {
 
 function backToChooserFromOrderMapping() {
   document.getElementById('orderMappingScreen').style.display = 'none';
+  document.getElementById('systemChooser').style.display = 'flex';
+  localStorage.removeItem('lastSystem');
+  if (typeof updateLastSavedIndicator === 'function') updateLastSavedIndicator();
+}
+
+let queueMonitorFrameLoaded = false;
+
+function chooseQueueMonitorSystem() {
+  if (!isAdmin && mySystems.queueMonitor === 'none') {
+    alert('🚫 ليس لديك صلاحية الوصول إلى متابعة الطلبات المباشرة. الرجاء التواصل مع المشرف لمنحك هذه الصلاحية.');
+    return;
+  }
+  document.getElementById('systemChooser').style.display = 'none';
+  const nameEl = document.getElementById('queueMonitorHeaderUserName');
+  if (nameEl) {
+    if (myDisplayName) {
+      nameEl.textContent = '👤 ' + myDisplayName;
+      nameEl.style.display = '';
+    } else {
+      nameEl.style.display = 'none';
+    }
+  }
+  const frame = document.getElementById('queueMonitorIframe');
+  if (!queueMonitorFrameLoaded) {
+    // The page re-checks the signed-in account itself and decides view vs.
+    // edit from systems.queueMonitor — nothing here can grant more access.
+    frame.src = 'queue-monitor.html';
+    queueMonitorFrameLoaded = true;
+  }
+  document.getElementById('queueMonitorScreen').style.display = 'flex';
+  localStorage.setItem('lastSystem', 'queueMonitor');
+  if (typeof updateLastSavedIndicator === 'function') updateLastSavedIndicator();
+  return true;
+}
+
+function backToChooserFromQueueMonitor() {
+  document.getElementById('queueMonitorScreen').style.display = 'none';
   document.getElementById('systemChooser').style.display = 'flex';
   localStorage.removeItem('lastSystem');
   if (typeof updateLastSavedIndicator === 'function') updateLastSavedIndicator();
@@ -3281,7 +3345,7 @@ document.addEventListener('DOMContentLoaded', updateOfflineBanner);
 // أي شاشة أخرى (لوحة الموظف مثلاً) kept the stale متابعة badge floating on
 // top of it. TOP_LEVEL_SCREEN_IDS below lists every *other* top-level
 // screen; if any of them is visible, متابعة is not, so both indicators hide.
-const TOP_LEVEL_SCREEN_IDS = ['loginScreen', 'authLoadingScreen', 'systemChooser', 'welcome', 'hrLeaveScreen', 'adminDashboardScreen', 'accountsFollowScreen', 'salesScreen', 'departmentsScreen', 'badalaScreen', 'ticketsScreen', 'teamScreen', 'orderMappingScreen', 'employeeApp', 'managerApp', 'historyScreen', 'monthlyReportScreen'];
+const TOP_LEVEL_SCREEN_IDS = ['loginScreen', 'authLoadingScreen', 'systemChooser', 'welcome', 'hrLeaveScreen', 'adminDashboardScreen', 'accountsFollowScreen', 'salesScreen', 'departmentsScreen', 'badalaScreen', 'ticketsScreen', 'teamScreen', 'orderMappingScreen', 'queueMonitorScreen', 'employeeApp', 'managerApp', 'historyScreen', 'monthlyReportScreen'];
 function isMatabaaScreenActive() {
   return TOP_LEVEL_SCREEN_IDS.every(id => {
     const el = document.getElementById(id);
@@ -7114,7 +7178,7 @@ let myCanAccessHR = false;  // true only for accounts explicitly granted access 
 let myAccountsAccessLevel = 'none'; // 'edit' (مدير — full control), 'view' (موظف — process/check only), or 'none'
 let myDisplayName = null;   // the friendly name shown in the header / activity log for whoever is logged in
 let myDepartment = null;    // the department this employee account belongs to (for targeted announcements)
-let mySystems = { matabaa: 'none', hr: 'none', manager: 'none', accounts: 'none', admin: 'none', sales: 'none', departments: 'none', badala: 'none', tickets: 'none', team: 'none', orderMapping: 'none' }; // unified per-system access for whoever is logged in
+let mySystems = { matabaa: 'none', hr: 'none', manager: 'none', accounts: 'none', admin: 'none', sales: 'none', departments: 'none', badala: 'none', tickets: 'none', team: 'none', orderMapping: 'none', queueMonitor: 'none' }; // unified per-system access for whoever is logged in
 
 // ── Unified systems-based permission model ─────────────────────
 // Every non-owner account now carries ONE clear thing: which of the 5
@@ -7143,7 +7207,7 @@ function computeMemberSystems(p) {
  badala: p.systems.badala || 'none',
  tickets: p.systems.tickets || 'none',
  team: p.systems.team || 'none',
- orderMapping: p.systems.orderMapping || 'none',
+ orderMapping: p.systems.orderMapping || 'none', queueMonitor: p.systems.queueMonitor || 'none',
  selfService: !!p.selfService,
  employeeName: p.employeeName || '',
  employeeCardId: p.employeeCardId || ''
@@ -7151,18 +7215,18 @@ function computeMemberSystems(p) {
  }
  // Legacy موظف (بوابة ذاتية) account
  if (p.role === 'employee') {
- return { matabaa: 'none', hr: 'none', manager: 'none', accounts: 'none', admin: 'none', sales: 'none', departments: 'none', badala: 'none', tickets: 'none', team: 'none', orderMapping: 'none', selfService: true, employeeName: p.employeeName || p.name || '', employeeCardId: p.employeeCardId || '' };
+ return { matabaa: 'none', hr: 'none', manager: 'none', accounts: 'none', admin: 'none', sales: 'none', departments: 'none', badala: 'none', tickets: 'none', team: 'none', orderMapping: 'none', queueMonitor: 'none', selfService: true, employeeName: p.employeeName || p.name || '', employeeCardId: p.employeeCardId || '' };
  }
  // Legacy مدير account — this is exactly بوابة المدير now
  if (p.role === 'manager') {
- return { matabaa: 'none', hr: 'none', manager: p.canApprove ? 'approve' : 'view', accounts: 'none', admin: 'none', sales: 'none', departments: 'none', badala: 'none', tickets: 'none', team: 'none', orderMapping: 'none', selfService: false, employeeName: '' };
+ return { matabaa: 'none', hr: 'none', manager: p.canApprove ? 'approve' : 'view', accounts: 'none', admin: 'none', sales: 'none', departments: 'none', badala: 'none', tickets: 'none', team: 'none', orderMapping: 'none', queueMonitor: 'none', selfService: false, employeeName: '' };
  }
  // Legacy مشرف فرعي account
  const tabVals = Object.values(p.tabs || {});
  const matabaa = tabVals.includes('edit') ? 'edit' : (tabVals.includes('view') ? 'view' : 'none');
  const accounts = p.accountsAccessLevel || (p.canAccessAccounts ? 'edit' : 'none');
  const hr = p.canAccessHR ? 'full' : 'none';
- return { matabaa, hr, manager: 'none', accounts, admin: p.isAdmin ? 'edit' : 'none', sales: p.systems && p.systems.sales || 'none', departments: p.systems && p.systems.departments || 'none', badala: p.systems && p.systems.badala || 'none', tickets: p.systems && p.systems.tickets || 'none', team: p.systems && p.systems.team || 'none', orderMapping: p.systems && p.systems.orderMapping || 'none', selfService: false, employeeName: '', employeeCardId: '' };
+ return { matabaa, hr, manager: 'none', accounts, admin: p.isAdmin ? 'edit' : 'none', sales: p.systems && p.systems.sales || 'none', departments: p.systems && p.systems.departments || 'none', badala: p.systems && p.systems.badala || 'none', tickets: p.systems && p.systems.tickets || 'none', team: p.systems && p.systems.team || 'none', orderMapping: p.systems && p.systems.orderMapping || 'none', queueMonitor: p.systems && p.systems.queueMonitor || 'none', selfService: false, employeeName: '', employeeCardId: '' };
 }
 
 // Short, readable summary of an account's access — used in the header
@@ -7182,6 +7246,7 @@ function systemsRoleLabel(sys, isAdminAcct) {
  if (sys.team === 'leader') parts.push('إدارة الفريق (رئيس فريق)');
  else if (sys.team !== 'none') parts.push('إدارة الفريق (موظف)');
  if (sys.orderMapping !== 'none') parts.push('مطابقة الطلبات (' + (sys.orderMapping === 'edit' ? 'مطابقة وتعديل' : 'عرض فقط') + ')');
+ if (sys.queueMonitor !== 'none') parts.push('متابعة الطلبات المباشرة (' + (sys.queueMonitor === 'edit' ? 'عرض وتحكم' : 'عرض فقط') + ')');
  if (sys.admin === 'edit') parts.push('لوحة المشرف');
  return parts.length ? parts.join(' | ') : 'بدون أي صلاحية نظام بعد';
 }
@@ -7214,7 +7279,7 @@ function loadMyAccessAndBoot(uid, email) {
  if (adminSnap.val() === true) {
       isAdmin = true;
       myWorkspaceOwner = uid;
-      mySystems = { matabaa: 'edit', hr: 'full', accounts: 'edit', admin: 'edit', sales: 'edit', departments: 'edit', badala: 'edit', tickets: 'edit', team: 'edit', orderMapping: 'edit', selfService: false, employeeName: '' };
+      mySystems = { matabaa: 'edit', hr: 'full', accounts: 'edit', admin: 'edit', sales: 'edit', departments: 'edit', badala: 'edit', tickets: 'edit', team: 'edit', orderMapping: 'edit', queueMonitor: 'edit', selfService: false, employeeName: '' };
       myCanAccessHR = true; // the primary workspace owner always has HR access
       myAccountsAccessLevel = 'edit'; // the primary workspace owner always has full accounts-follow-up access
       ALL_TAB_IDS.forEach(t => myTabPerms[t] = 'edit');
@@ -9912,7 +9977,7 @@ body.subapp-open #langToggleBtn {
 // rules above). Uses a MutationObserver on each screen's style attribute
 // instead of touching every choose*/backToChooser* function individually.
 (function () {
-  const SUBAPP_IDS = ['hrLeaveScreen', 'adminDashboardScreen', 'accountsFollowScreen', 'salesScreen', 'departmentsScreen', 'badalaScreen', 'ticketsScreen', 'teamScreen', 'orderMappingScreen'];
+  const SUBAPP_IDS = ['hrLeaveScreen', 'adminDashboardScreen', 'accountsFollowScreen', 'salesScreen', 'departmentsScreen', 'badalaScreen', 'ticketsScreen', 'teamScreen', 'orderMappingScreen', 'queueMonitorScreen'];
   function syncSubappOpenClass() {
     const anyOpen = SUBAPP_IDS.some(id => {
       const el = document.getElementById(id);

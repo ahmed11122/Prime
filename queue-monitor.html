@@ -1,0 +1,1616 @@
+<!-- © 2026 أحمد ماجد سجاد — جميع الحقوق محفوظة. -->
+<!DOCTYPE html>
+<html dir="rtl" lang="ar">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>متابعة الطلبات المباشرة — Mutabaa</title>
+<link rel="icon" type="image/png" href="https://raw.githubusercontent.com/ahmed11122/Prime/main/img/favicon-48x48.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+<!-- ═══ DATABASE LAYER (Firebase) — this whole block + every fbDB./fbAuth. call below is what gets replaced when moving to PocketBase ═══ -->
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-database-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-auth-compat.js"></script>
+<script>
+const firebaseConfig = {
+apiKey: "AIzaSyA1q9LiS6EXNCBFmFvytyN-p4KKgP9wym4",
+authDomain: "prime-e-8eb80.firebaseapp.com",
+databaseURL: "https://prime-e-8eb80-default-rtdb.firebaseio.com",
+projectId: "prime-e-8eb80",
+storageBucket: "prime-e-8eb80.firebasestorage.app",
+messagingSenderId: "671376930301",
+appId: "1:671376930301:web:f8b61666314f3149fb5594"
+};
+firebase.initializeApp(firebaseConfig);
+const fbDB = firebase.database();
+const fbAuth = firebase.auth();
+</script>
+<style>
+:root {
+--primary: #0f172a;
+--primary-hover: #1e293b;
+--accent: #2563eb;
+--accent-light: #eff6ff;
+--bg-main: #f8fafc;
+--surface: #ffffff;
+--text-main: #0f172a;
+--text-muted: #64748b;
+--border: #e2e8f0;
+--radius: 12px;
+--shadow-sm: 0 1px 3px rgba(0,0,0,0.05);
+--shadow-md: 0 4px 6px -1px rgba(0,0,0,0.05), 0 2px 4px -1px rgba(0,0,0,0.03);
+--shadow-lg: 0 10px 15px -3px rgba(0,0,0,0.08), 0 4px 6px -2px rgba(0,0,0,0.02);
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html { scroll-behavior: smooth; }
+body {
+font-family: 'Tajawal', sans-serif;
+background: var(--bg-main);
+color: var(--text-main);
+direction: rtl;
+font-size: 14.5px;
+line-height: 1.6;
+}
+
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+
+#adminRoot {
+display: flex;
+min-height: 100vh;
+}
+
+/* Sidebar Layout */
+.sidebar {
+width: 260px;
+background: var(--primary);
+color: #fff;
+padding: 24px 16px;
+display: flex;
+flex-direction: column;
+gap: 24px;
+flex-shrink: 0;
+box-shadow: 4px 0 24px rgba(0,0,0,0.05);
+}
+
+.sidebar-brand {
+font-weight: 900;
+font-size: 1.25rem;
+color: #fff;
+display: flex;
+align-items: center;
+gap: 10px;
+padding: 0 8px;
+}
+
+.sidebar-nav {
+display: flex;
+flex-direction: column;
+gap: 6px;
+}
+
+.tab {
+display: flex;
+align-items: center;
+gap: 12px;
+padding: 12px 16px;
+border-radius: var(--radius);
+border: none;
+background: transparent;
+color: #94a3b8;
+font-family: inherit;
+font-weight: 700;
+font-size: 0.88rem;
+cursor: pointer;
+text-align: right;
+transition: all 0.2s ease;
+width: 100%;
+}
+
+.tab:hover {
+background: rgba(255, 255, 255, 0.05);
+color: #f1f5f9;
+}
+
+.tab.active {
+background: var(--accent);
+color: #ffffff;
+box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3);
+}
+
+/* Main Content Area */
+.main-wrapper {
+flex: 1;
+display: flex;
+flex-direction: column;
+overflow-x: hidden;
+}
+
+.top-header {
+background: var(--surface);
+border-bottom: 1px solid var(--border);
+padding: 16px 32px;
+display: flex;
+justify-content: space-between;
+align-items: center;
+}
+
+.page-title {
+font-weight: 800;
+font-size: 1.15rem;
+color: var(--text-main);
+}
+
+.main-content {
+padding: 32px;
+flex: 1;
+}
+
+/* Card & Section Styles */
+.card-panel {
+background: var(--surface);
+border: 1px solid var(--border);
+border-radius: var(--radius);
+padding: 24px;
+margin-bottom: 24px;
+box-shadow: var(--shadow-sm);
+transition: box-shadow 0.2s ease;
+}
+
+.card-panel:hover {
+box-shadow: var(--shadow-md);
+}
+
+.card-header {
+margin-bottom: 18px;
+}
+
+.card-title {
+font-size: 1rem;
+color: var(--text-main);
+font-weight: 800;
+}
+
+.card-subtitle {
+font-size: 0.82rem;
+color: var(--text-muted);
+margin-top: 4px;
+}
+
+/* Overview Stat Cards Grid */
+.stats-grid {
+display: grid;
+grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+gap: 18px;
+margin-bottom: 28px;
+}
+
+.ov-card {
+background: var(--surface);
+border: 1px solid var(--border);
+border-radius: var(--radius);
+padding: 20px;
+text-align: right;
+box-shadow: var(--shadow-sm);
+position: relative;
+overflow: hidden;
+}
+
+.ov-card::before {
+content: '';
+position: absolute;
+top: 0; right: 0; left: 0;
+height: 3px;
+background: var(--accent);
+opacity: 0.8;
+}
+
+.ov-card-title {
+font-size: 0.8rem;
+color: var(--text-muted);
+font-weight: 700;
+margin-bottom: 8px;
+}
+
+.ov-card-num {
+font-size: 2rem;
+font-weight: 900;
+color: var(--text-main);
+line-height: 1;
+}
+
+.ov-card-sub {
+font-size: 0.75rem;
+color: var(--text-muted);
+margin-top: 8px;
+}
+
+/* Action Controls Grid */
+.actions-grid {
+display: grid;
+grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+gap: 12px;
+max-width: 600px;
+margin: 0 auto;
+}
+
+/* Forms & Controls */
+.form-grid {
+display: grid;
+grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+gap: 16px;
+margin-bottom: 16px;
+}
+
+.form-group {
+display: flex;
+flex-direction: column;
+gap: 6px;
+}
+
+.form-label {
+font-size: 0.83rem;
+color: var(--text-main);
+font-weight: 700;
+}
+
+input[type="text"], input[type="tel"], select, textarea {
+width: 100%;
+padding: 10px 14px;
+border: 1px solid var(--border);
+border-radius: 8px;
+font-family: inherit;
+font-size: 0.88rem;
+background: var(--surface);
+color: var(--text-main);
+outline: none;
+transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+input:focus, select:focus, textarea:focus {
+border-color: var(--accent);
+box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+}
+
+/* Buttons */
+.btn {
+padding: 10px 20px;
+border: 1px solid var(--border);
+border-radius: 8px;
+font-family: inherit;
+font-weight: 700;
+font-size: 0.85rem;
+cursor: pointer;
+background: #f1f5f9;
+color: var(--text-main);
+transition: all 0.2s ease;
+display: inline-flex;
+align-items: center;
+justify-content: center;
+gap: 6px;
+}
+
+.btn:hover { background: #e2e8f0; }
+
+.btn-primary {
+background: var(--accent);
+color: #fff;
+border-color: var(--accent);
+}
+
+.btn-primary:hover {
+background: #1d4ed8;
+border-color: #1d4ed8;
+}
+
+.btn-success { background: #16a34a; color: #fff; border-color: #16a34a; }
+.btn-success:hover { background: #15803d; }
+
+.btn-danger { background: #dc2626; color: #fff; border-color: #dc2626; }
+.btn-danger:hover { background: #b91c1c; }
+
+/* Tables */
+.tbl-wrap {
+overflow-x: auto;
+border: 1px solid var(--border);
+border-radius: var(--radius);
+background: var(--surface);
+}
+
+table {
+width: 100%;
+min-width: 760px;
+border-collapse: collapse;
+}
+
+th, td {
+padding: 12px 16px;
+border-bottom: 1px solid var(--border);
+text-align: right;
+font-size: 0.85rem;
+vertical-align: top;
+}
+
+th { white-space: nowrap; }
+
+th {
+background: #f8fafc;
+font-weight: 700;
+color: var(--text-muted);
+}
+
+tr:last-child td { border-bottom: none; }
+tr:hover td { background: #fafafa; }
+
+/* ═══ Leave / day-off badges ═══ */
+.leave-badge {
+display: inline-flex;
+align-items: center;
+gap: 4px;
+padding: 2px 12px;
+border-radius: 20px;
+font-weight: 800;
+font-size: 0.78rem;
+white-space: nowrap;
+}
+.leave-badge-اجازة { background: #dbeafe; color: #1e40af; }
+.leave-badge-زمنية { background: #ffedd5; color: #9a3412; }
+.leave-badge-مرضية { background: #fee2e2; color: #991b1b; }
+.leave-badge-other { background: #e2e8f0; color: #334155; }
+
+.leave-row {
+display: flex;
+align-items: center;
+justify-content: space-between;
+gap: 10px;
+background: var(--bg-main);
+border: 1px solid var(--border);
+border-radius: 10px;
+padding: 12px 16px;
+margin-bottom: 8px;
+flex-wrap: wrap;
+}
+.leave-row-info { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.leave-filter-bar {
+display: flex;
+flex-wrap: wrap;
+gap: 8px;
+align-items: center;
+margin-bottom: 14px;
+background: var(--bg-main);
+border: 1px solid var(--border);
+border-radius: 10px;
+padding: 10px;
+}
+.leave-filter-bar input, .leave-filter-bar select {
+padding: 7px 10px;
+border-radius: 8px;
+border: 1px solid var(--border);
+font-size: 0.82rem;
+font-family: inherit;
+}
+.leave-filter-bar input[type="text"] { width: 160px; }
+
+/* ═══ Queue monitor: responsive card grid (replaces the old wide table) ═══ */
+.qm-grid {
+display: grid;
+grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+gap: 14px;
+}
+.qm-card {
+background: var(--surface);
+border: 1px solid var(--border);
+border-radius: var(--radius);
+padding: 16px;
+box-shadow: var(--shadow-sm);
+display: flex;
+flex-direction: column;
+gap: 10px;
+min-width: 0;
+}
+.qm-card-head {
+display: flex;
+align-items: flex-start;
+justify-content: space-between;
+gap: 8px;
+flex-wrap: wrap;
+}
+.qm-card-name {
+font-weight: 800;
+color: var(--text-main);
+cursor: pointer;
+font-size: 0.95rem;
+}
+.qm-card-name:hover { color: var(--accent); }
+.qm-card-count {
+background: #f1f5f9;
+color: #94a3b8;
+padding: 3px 14px;
+border-radius: 20px;
+font-weight: 800;
+font-size: 0.9rem;
+flex-shrink: 0;
+}
+.qm-card-count.has-orders { background: #eff6ff; color: #2563eb; }
+.qm-card-meta { display: flex; flex-direction: column; gap: 3px; }
+.qm-card-badges { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.qm-card-warn { display: flex; align-items: center; gap: 8px; }
+.qm-card-controls summary {
+cursor: pointer;
+font-weight: 700;
+font-size: 0.8rem;
+color: var(--accent);
+padding: 6px 0;
+list-style: none;
+}
+.qm-card-controls summary::-webkit-details-marker { display: none; }
+.qm-card-controls summary::before { content: '⚙️ '; }
+.qm-card-controls-body {
+display: flex;
+flex-direction: column;
+gap: 8px;
+padding-top: 8px;
+border-top: 1px solid var(--border);
+margin-top: 4px;
+}
+.qm-actions-row { display: flex; flex-wrap: wrap; gap: 6px; }
+.qm-input-row {
+display: flex;
+align-items: center;
+gap: 6px;
+flex-wrap: wrap;
+}
+.qm-input-row input {
+padding: 4px 8px;
+border-radius: 6px;
+border: 1px solid var(--border);
+font-size: 0.78rem;
+min-width: 0;
+}
+.qm-pool-banner {
+display: flex;
+align-items: center;
+gap: 10px;
+margin-bottom: 14px;
+background: var(--bg-main);
+border: 1px solid var(--border);
+border-radius: 8px;
+padding: 10px 14px;
+flex-wrap: wrap;
+}
+
+/* Responsive adjustments */
+@media (max-width: 900px) {
+#adminRoot { flex-direction: column; }
+/* Sidebar becomes a sticky horizontal tab strip instead of a tall vertical
+   list — on a phone, stacking every nav button above the content pushed
+   the actual dashboard hundreds of pixels down before this fix. */
+.sidebar {
+width: 100%;
+flex-direction: row;
+align-items: center;
+gap: 10px;
+padding: 10px 12px;
+position: sticky;
+top: 0;
+z-index: 40;
+box-shadow: 0 2px 12px rgba(0,0,0,0.15);
+}
+.sidebar-brand { padding: 0; flex-shrink: 0; }
+.sidebar-nav {
+flex-direction: row;
+flex-wrap: nowrap;
+overflow-x: auto;
+-webkit-overflow-scrolling: touch;
+gap: 6px;
+padding-bottom: 2px;
+}
+.tab {
+flex-shrink: 0;
+width: auto;
+white-space: nowrap;
+padding: 9px 14px;
+}
+.main-content { padding: 16px; }
+.stats-grid { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); }
+.form-grid { grid-template-columns: 1fr; }
+}
+
+@media (max-width: 640px) {
+.main-content { padding: 10px; }
+.card-panel { padding: 14px; }
+.top-header { padding: 12px 16px; }
+.page-title { font-size: 1rem; }
+.sidebar-brand span:last-child { font-size: 1rem; }
+.tab { font-size: 0.78rem; padding: 8px 12px; }
+.tab span:first-child { font-size: 0.95rem; }
+.stats-grid { grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 10px; }
+.ov-card { padding: 14px; }
+.ov-card-num { font-size: 1.5rem; }
+.qm-grid { grid-template-columns: 1fr; }
+.qm-card { padding: 12px; }
+.leave-filter-bar { flex-direction: column; align-items: stretch; }
+.leave-filter-bar input[type="text"] { width: 100%; }
+.leave-row, .leave-row-info { align-items: flex-start; }
+.qm-input-row input[type="text"] { width: 100%; flex: 1; }
+.qm-card-head { flex-direction: column; align-items: flex-start; }
+.qm-actions-row .btn { flex: 1 1 auto; }
+}
+</style>
+</head>
+<body>
+
+<div id="roleNotice" style="padding:40px;text-align:center;color:#64748b;font-size:0.95rem">جارِ التحقق من صلاحياتك...</div>
+
+<div id="adminRoot" style="display:none">
+<div class="main-wrapper">
+<header class="top-header">
+<div class="page-title">📦 متابعة الطلبات المباشرة <span id="qmModeBadge" style="display:none;margin-inline-start:8px;padding:2px 10px;border-radius:999px;background:#f1f5f9;color:#475569;font-size:0.74rem;font-weight:700">👁️ عرض فقط</span></div>
+</header>
+<main class="main-content">
+<div id="tab-admin">
+<div class="admin-section" data-sec="queuemonitor">
+<div class="card-panel">
+<div class="card-header">
+<div class="card-title">📦 متابعة الطلبات المباشرة</div>
+<div class="card-subtitle">عدد الطلبات (تحت التدقيق) لكل موظف لحظيًا، وحالة العمل/الاستراحة، وتحذيرات تجاوز وقت الاستراحة اليوم (أكثر من 3 = تنزيل تقييم). <span id="qmEditHint">اضغط ⚙️ داخل بطاقة أي موظف للتحكم به يدويًا.</span></div>
+</div>
+<div class="leave-filter-bar">
+<button class="btn" id="qmViewBtn-live" onclick="qmSetView('live')">🔴 مباشر الآن</button>
+<button class="btn" id="qmViewBtn-perf" onclick="qmSetView('perf')">📅 الأيام السابقة (أداء الدورات)</button>
+<select id="qmShiftSel" onchange="qmRefresh()"><option value="all">كل الدوامات</option></select>
+<input id="qmNameFilter" type="text" placeholder="🔍 اسم الموظف" oninput="qmRefresh()">
+<span id="qmDateBox" style="display:none;align-items:center;gap:6px;font-size:0.82rem;flex-wrap:wrap">من <input type="date" id="qmFrom" onchange="qmRefresh()"> إلى <input type="date" id="qmTo" onchange="qmRefresh()"> <button class="btn" style="padding:4px 10px;" onclick="qm.cache=null;qmRefresh()">🔄</button></span>
+</div>
+<div class="leave-filter-bar" style="margin-top:6px;">
+<button class="btn" id="qmBackupBtn" onclick="qmDownloadBackup()">💾 تنزيل نسخة كاملة (JSON)</button>
+<button class="btn" id="qmExportBtn" onclick="qmExportCsv()">📊 تصدير إلى Excel</button>
+<span id="qmExportStatus" style="font-size:0.8rem;font-weight:700;color:var(--text-muted)"></span>
+</div>
+<div id="queueMonitorList">
+<div style="text-align:center;color:#94a3b8;padding:16px;">جارِ التحميل...</div>
+</div>
+<div id="qmPerfWrap" style="display:none"></div>
+</div>
+</div>
+</div>
+</main>
+</div>
+</div>
+
+<script>
+let myWorkspaceOwner = null, isAdmin = false, myDisplayName = '';
+// true = full control (force states, warnings, shifts, popups, leave); false = read-only view.
+let qmCanEdit = false;
+
+function computeMemberSystems(p) {
+if (p.systems) {
+return {
+matabaa: p.systems.matabaa || 'none', hr: p.systems.hr || 'none', manager: p.systems.manager || 'none',
+accounts: p.systems.accounts || 'none', admin: p.systems.admin || 'none', sales: p.systems.sales || 'none',
+departments: p.systems.departments || 'none', badala: p.systems.badala || 'none', tickets: p.systems.tickets || 'none', team: p.systems.team || 'none',
+orderMapping: p.systems.orderMapping || 'none', queueMonitor: p.systems.queueMonitor || 'none',
+selfService: !!p.selfService, employeeName: p.employeeName || '', employeeCardId: p.employeeCardId || ''
+};
+}
+if (p.role === 'employee') {
+return { matabaa: 'none', hr: 'none', manager: 'none', accounts: 'none', admin: 'none', sales: 'none', departments: 'none', badala: 'none', tickets: 'none', team: 'none', orderMapping: 'none', queueMonitor: 'none', selfService: true, employeeName: p.employeeName || p.name || '', employeeCardId: p.employeeCardId || '' };
+}
+if (p.role === 'manager') {
+return { matabaa: 'none', hr: 'none', manager: p.canApprove ? 'approve' : 'view', accounts: 'none', admin: 'none', sales: 'none', departments: 'none', badala: 'none', tickets: 'none', team: 'none', orderMapping: 'none', queueMonitor: 'none', selfService: false, employeeName: '' };
+}
+const tabVals = Object.values(p.tabs || {});
+const matabaa = tabVals.includes('edit') ? 'edit' : (tabVals.includes('view') ? 'view' : 'none');
+const accounts = p.accountsAccessLevel || (p.canAccessAccounts ? 'edit' : 'none');
+const hr = p.canAccessHR ? 'full' : 'none';
+return { matabaa, hr, manager: 'none', accounts, admin: p.isAdmin ? 'edit' : 'none', sales: p.systems && p.systems.sales || 'none', departments: p.systems && p.systems.departments || 'none', badala: p.systems && p.systems.badala || 'none', tickets: p.systems && p.systems.tickets || 'none', team: p.systems && p.systems.team || 'none', orderMapping: p.systems && p.systems.orderMapping || 'none', queueMonitor: p.systems && p.systems.queueMonitor || 'none', selfService: false, employeeName: '', employeeCardId: '' };
+}
+
+function canUseAdminDashboard() { return true; }
+function dbPath(p) { return 'users/' + myWorkspaceOwner + '/' + p; }
+function currentUserBase() { return 'users/' + myWorkspaceOwner; }
+
+function logActivity(action, details) {
+if (!myWorkspaceOwner) return;
+fbDB.ref('users/' + myWorkspaceOwner + '/activityLogs').push({
+action, details: details || '', by: myDisplayName || 'مجهول', ts: Date.now()
+}).catch(() => {});
+}
+
+function escapeHtml(str) {
+return String(str == null ? '' : str)
+.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+
+function leaveTypeBadge(type) {
+const t = String(type || '').trim();
+const cls = (t === 'اجازة' || t === 'زمنية' || t === 'مرضية') ? t : 'other';
+const icon = t === 'اجازة' ? '🏖️' : t === 'زمنية' ? '⏰' : t === 'مرضية' ? '🤒' : '📌';
+return `<span class="leave-badge leave-badge-${cls}">${icon} ${escapeHtml(t || 'غير محدد')}</span>`;
+}
+
+// Used by the queue-monitor cards to flag "🏖️ إجازة اليوم" / "⏰ زمنية اليوم"
+// next to an employee's name, cross-referencing the same leavesData cache.
+function getTodayLeaveBadgeForName(name) {
+if (!name) return '';
+const today = qmToday();
+const hit = (window._leavesDataCache || []).find(r => r.emp === name && r.date === today);
+return hit ? leaveTypeBadge(hit.type) : '';
+}
+
+function staffMemberRef(uid) { return fbDB.ref('staffMembers/' + myWorkspaceOwner + '/' + uid); }
+
+// Only keeps the leaves cache live (the cards read it for the 🏖️/⏰ badges and
+// to exclude people on leave from the queue). The leave-history UI is not part
+// of this page anymore.
+let _leavesDataListenerAttached = false;
+function loadLeaveHistory() {
+if (_leavesDataListenerAttached) return;
+_leavesDataListenerAttached = true;
+fbDB.ref(dbPath('appData/leavesData')).on('value', snap => {
+try { window._leavesDataCache = JSON.parse(snap.val() || '[]'); } catch (e) { window._leavesDataCache = []; }
+if (_qmLastData) renderQueueMonitorTable(_qmLastData);
+}, () => { _leavesDataListenerAttached = false; });
+}
+
+// ═══ Live Queue Monitor ═══
+// Expected data shape written by the extension, per employee key (sanitized name):
+// queueMonitor/{workspaceOwner}/{employeeKey} = {
+//   name: "احمد ماجد",
+//   queueCount: 3,              // rows currently in تحت التدقيق for this employee
+//   working: true,               // employee's own toggle state
+//   lastUpdate: <server timestamp>,
+//   breakStartedAt: <timestamp or null>,  // set when working=false
+//   adminForce: "working" | "break" | null // admin override written from this panel; extension must read + obey this
+//   warningsToday: 2,            // # of break-overrun warnings today (resets daily on the extension side) —
+//                                 // only used to drive the "> 3 today = تنزيل تقييم" flag now
+//   warningsDate: "2026-9-22"    // date key the count above belongs to — must match todayDateKey() here
+//   warningCount: 5,             // ALL-TIME إنذار total — automatic (break-overrun) + manual, combined,
+//                                 // never reset by date. See addPersistentWarning() in relay.js and
+//                                 // addEmployeeWarning() below. Only cleared by the 🧹 reset button.
+//   warnings: { pushId: { text, createdAt, source: 'auto'|'manual', addedBy? } }, // full reason log,
+//                                 // shown as a hover tooltip on the ⚠️ badge
+//   breakLimitMinutes: 15,       // set from this panel; extension uses this instead of its 15-min default
+//   popup: { id, text, createdAt } // one-off message set from this panel, shown once by the extension
+//   shiftStart: "08:00",         // set from this panel — "HH:MM", employee's own local clock
+//   shiftEnd: "16:00",           // outside [shiftStart, shiftEnd) the extension doesn't run away/warning
+//                                 // tracking at all — being idle or on استراحة off-shift isn't a violation
+//                                 // of anything. Wraps past midnight if shiftEnd < shiftStart (night shift).
+//                                 // null/null (not set) = tracking always on, same as before this existed.
+//   overtimeMsToday: 1800000,    // ms spent actively working OUTSIDE the shift window today — informational
+//   overtimeDate: "2026-9-24",   // only, no warnings/penalties attached
+// }
+
+// ═══ POCKETBASE LAYER — replaces queueMonitor/queueRuns/queueSessions in Firebase ═══
+// Firebase is still used here ONLY for login + admins/memberIndex/staffMembers/leavesData/activityLogs
+// (tiny, rarely changes). All the heavy live data now lives in PocketBase.
+const PB_BASE_URL = "https://api.mutabaa.online";
+const PB_API_KEY = "cf98ce3b65462aba390b6de5d4922f7219c46b344e6ba1cc";
+const QM_POLL_MS = 5000;
+
+async function pbFetch(path, opts) {
+  opts = opts || {};
+  const res = await fetch(PB_BASE_URL + '/api/collections/' + path, {
+    ...opts,
+    headers: { 'X-Api-Key': PB_API_KEY, ...(opts.body ? { 'Content-Type': 'application/json' } : {}) }
+  });
+  if (!res.ok) {
+    let msg = ''; try { msg = (await res.json()).message || ''; } catch (e) {}
+    const err = new Error('PocketBase ' + res.status + (msg ? ': ' + msg : '')); err.status = res.status; throw err;
+  }
+  return res.status === 204 ? null : res.json();
+}
+// Follows pagination so nothing is silently truncated.
+async function pbList(collection, filter, sort, opts) {
+  opts = opts || {};
+  const perPage = opts.perPage || 500; let page = 1, all = [];
+  while (true) {
+    const params = new URLSearchParams({ page: String(page), perPage: String(perPage) });
+    if (filter) params.set('filter', filter);
+    if (sort) params.set('sort', sort);
+    if (opts.fields) params.set('fields', opts.fields);
+    if (opts.skipTotal) params.set('skipTotal', '1');
+    const data = await pbFetch(collection + '/records?' + params.toString());
+    all = all.concat(data.items || []);
+    if (opts.single || page >= (data.totalPages || 1)) break;
+    page++;
+  }
+  return all;
+}
+const pbQ = v => '"' + String(v).replace(/\\/g, '\\\\').replace(/"/g, '\\"') + '"';
+
+// snake_case row  ->  the camelCase shape the rest of this file already renders (0/"" = unset -> null)
+const QM_TEXT = new Set(['shiftStart', 'shiftEnd', 'adminForce']);
+const QM_JSON = new Set(['breakSessionStartRemainingMs', 'breakBudgetRemainingMs', 'run', 'lastRun', 'lastCountSeen', 'manualTarget', 'popup', 'lastPopupAck']);
+const QM_NULL_IF_ZERO = new Set(['breakStartedAt', 'clientBreakStartedAt', 'queueJoinedAt', 'targetAssign', 'breakLimitMinutes', 'resetWarningsAt', 'resetBreakBudgetAt']);
+const snakeToCamel = k => k.replace(/_([a-z])/g, (_, c) => c.toUpperCase());
+const camelToSnake = k => k.replace(/[A-Z]/g, c => '_' + c.toLowerCase());
+function pbRowToEmp(r) {
+  const o = {};
+  Object.keys(r).forEach(k => {
+    if (['id', 'collectionId', 'collectionName', 'created', 'updated', 'name_key'].includes(k)) return;
+    const c = snakeToCamel(k); let v = r[k];
+    if ((QM_NULL_IF_ZERO.has(c) && !v) || (QM_TEXT.has(c) && v === '')) v = null;
+    o[c] = v;
+  });
+  return o;
+}
+// camelCase patch (null = clear)  ->  snake_case record body
+function empPatchToPb(patch) {
+  const o = {};
+  Object.keys(patch).forEach(c => {
+    let v = patch[c];
+    if (v === null || v === undefined) v = QM_JSON.has(c) ? null : (QM_TEXT.has(c) ? '' : 0);
+    o[camelToSnake(c)] = v;
+  });
+  return o;
+}
+
+// ── live state (polling, incremental) ──
+let _qmIds = {};          // name_key -> record id
+let _qmCursor = '';       // newest `updated` we've seen
+let _qmWarnCount = {};    // name_key -> warning_count we last loaded warnings for
+let _qmPollTimer = null, _qmPollN = 0, _qmPoolSig = '';
+
+async function qmLoadWarnings(key) {
+  const rows = await pbList('qm_warnings', 'name_key=' + pbQ(key), 'created_at');
+  const obj = {}; rows.forEach(w => { obj[w.id] = { text: w.text || null, createdAt: w.created_at, source: w.source }; });
+  return obj;
+}
+async function qmPollOnce() {
+  let changed = false;
+  const filter = _qmCursor ? 'updated>' + pbQ(_qmCursor) : '';
+  const rows = await pbList('qm_employees', filter, 'updated');
+  for (const r of rows) {
+    _qmIds[r.name_key] = r.id;
+    const emp = pbRowToEmp(r);
+    const prev = _qmTreeData[r.name_key];
+    if (emp.warningCount > 0) {
+      if (!prev || _qmWarnCount[r.name_key] !== emp.warningCount) { emp.warnings = await qmLoadWarnings(r.name_key); _qmWarnCount[r.name_key] = emp.warningCount; }
+      else emp.warnings = prev.warnings;
+    }
+    _qmTreeData[r.name_key] = emp;
+    if (r.updated > _qmCursor) _qmCursor = r.updated;
+    changed = true;
+  }
+  // pool count (single tiny row)
+  try {
+    const pool = (await pbList('qm_pool', '', '', { single: true, perPage: 1 }))[0];
+    const sig = pool ? pool.count + ':' + pool.last_update : '';
+    if (sig !== _qmPoolSig) { _qmPoolSig = sig; _qmTreeData._pool = pool ? { count: pool.count, asOf: pool.as_of, lastUpdate: pool.last_update } : undefined; changed = true; }
+  } catch (e) { /* pool is optional */ }
+  // every ~1 min drop employees that were deleted server-side
+  if (++_qmPollN % 12 === 0) {
+    const ids = await pbList('qm_employees', '', '', { fields: 'name_key', skipTotal: false });
+    const live = new Set(ids.map(x => x.name_key));
+    Object.keys(_qmTreeData).forEach(k => { if (k.charAt(0) !== '_' && !live.has(k)) { delete _qmTreeData[k]; delete _qmIds[k]; changed = true; } });
+  }
+  if (changed) { _qmLastData = _qmTreeData; window._qmData = _qmTreeData; renderQueueMonitorTable(_qmTreeData); }
+}
+function qmShowReadError(err) {
+  const c = document.getElementById('queueMonitorList');
+  if (c && !Object.keys(_qmTreeData).length) c.innerHTML = `<div style="text-align:center;color:#dc2626;padding:16px;">تعذّر تحميل البيانات: ${escapeHtml(err.message || 'خطأ')}<br><span style="font-size:0.8rem;color:#94a3b8;">تحقق من اتصال PocketBase ومفتاح X-Api-Key</span></div>`;
+  console.error('[queueMonitor] read failed:', err);
+}
+function qmStartPolling() {
+  if (_qmPollTimer) return;
+  const tick = async () => {
+    if (document.hidden) return; // nobody is looking -> no requests at all
+    try { await qmPollOnce(); } catch (e) { qmShowReadError(e); }
+  };
+  tick(); _qmPollTimer = setInterval(tick, QM_POLL_MS);
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) tick(); });
+}
+
+// ── writes ──
+async function qmPatchEmp(key, patch, extra) {
+  const id = _qmIds[key];
+  if (!id) throw new Error('الموظف غير موجود');
+  const body = empPatchToPb(patch);
+  if (extra) Object.assign(body, extra);
+  const rec = await pbFetch('qm_employees/records/' + id, { method: 'PATCH', body: JSON.stringify(body) });
+  _qmTreeData[key] = { ...(_qmTreeData[key] || {}), ...pbRowToEmp(rec), warnings: (_qmTreeData[key] || {}).warnings };
+  _qmLastData = _qmTreeData; window._qmData = _qmTreeData; renderQueueMonitorTable(_qmTreeData);
+  return rec;
+}
+
+
+// Last snapshot rendered by the queue-monitor listener below, kept around so
+// that when leavesData changes (an admin toggles "إجازة/زمنية اليوم" from a
+// card, see qmSetTodayLeaveFromCard) we can re-render the cards immediately
+// without waiting for the next queueMonitor tick.
+let _qmLastData = null;
+
+// true when `name` has an إجازة/زمنية/مرضية record for today — used to
+// exclude them from the fair-share order distribution below and from the
+// "الدور/الحصة" labels in the card, same as an off-shift employee already is.
+function qmIsOnLeaveToday(name) {
+if (!name) return false;
+const today = qmToday();
+return (window._leavesDataCache || []).some(r => r.emp === name && r.date === today);
+}
+
+// Must match todayKey() in content-queuemonitor.js exactly, so a warning
+// reported today doesn't silently show as stale/expired here.
+function todayDateKey() {
+const d = new Date();
+return `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`;
+}
+let _queueMonitorListenerAttached = false;
+
+// NOTE: fair-share batch computation (perEmployee = poolCount / working count,
+// capped at 30) is no longer done here — it moved server-side into relay.js's
+// recomputeQueueAssignments(), which runs on every employee report regardless
+// of whether this dashboard tab is open. This file only ever displays
+// targetAssign now (see posLabel/targetLabel below); it doesn't compute or
+// write it.
+
+// This used to be queueMonitorRef().on('value', ...) — Firebase's 'value'
+// event resends the ENTIRE node on every single write anywhere under it.
+// relay.js writes to one employee's own child roughly every 20s
+// (LIVE_REPORT_MS) per working employee, plus toggles/warnings/popups/
+// _activeBreak — with 15 employees that's a write every ~1-2s on average,
+// and 'value' was re-downloading the whole ~15-employee tree (all names,
+// timestamps, warning logs, everything) EVERY time, to EVERY open dashboard
+// tab/device. That was almost certainly the single largest Firebase cost in
+// the whole project. child_added/child_changed/child_removed instead only
+// send the ONE child that actually changed — a single employee's record
+// (or _pool, or _activeBreak) — so a routine 20s report now costs ~1 small
+// record instead of the entire tree. _qmTreeData accumulates those child
+// events into the same merged shape renderQueueMonitorTable() already
+// expects, so nothing downstream of this function needs to change.
+let _qmTreeData = {};
+function loadQueueMonitor() {
+if (!canUseAdminDashboard()) return;
+loadLeaveHistory();
+if (_queueMonitorListenerAttached) return;
+_queueMonitorListenerAttached = true;
+qmStartPolling();
+}
+
+// ═══ Queue monitor: filters + x→0 run performance ═══
+// Data: queueRuns/{owner}/{YYYY-MM-DD}/{employeeKey}/{startedAt} written by relay.js (see saveRunRecord).
+const qm = { view: 'live', cache: null, shifts: new Set() };
+function qmToday() { return new Date(Date.now() + 3 * 3600e3).toISOString().slice(0, 10); } // Baghdad, same as relay
+function qmDur(ms) {
+  const s = Math.max(0, Math.round(ms / 1000));
+  if (s < 60) return s + ' ث';
+  const m = Math.floor(s / 60), r = s % 60;
+  return m < 60 ? `${m} د${r ? ' ' + r + ' ث' : ''}` : `${Math.floor(m / 60)} س ${m % 60} د`;
+}
+// true when the employee has a shift window set and Baghdad time (same basis as relay) is outside it
+function qmOffShift(emp) {
+  const p = t => { const m = /^(\d\d):(\d\d)$/.exec(t || ''); return m ? +m[1] * 60 + +m[2] : null; };
+  const a = p(emp && emp.shiftStart), b = p(emp && emp.shiftEnd);
+  if (a === null || b === null || a === b) return false;
+  const d = new Date(Date.now() + 3 * 3600e3), n = d.getUTCHours() * 60 + d.getUTCMinutes();
+  return a < b ? !(n >= a && n < b) : !(n >= a || n < b);
+}
+function qmPass(shift, name) {
+  const sel = document.getElementById('qmShiftSel').value;
+  const q = document.getElementById('qmNameFilter').value.trim();
+  return (sel === 'all' || sel === (shift || 'none')) && (!q || String(name || '').includes(q));
+}
+function qmFillShifts(list) {
+  list.forEach(x => qm.shifts.add(x));
+  const sel = document.getElementById('qmShiftSel'), arr = [...qm.shifts].sort(), sig = arr.join('|');
+  if (sel.dataset.sig === sig) return;
+  const cur = sel.value; sel.dataset.sig = sig;
+  sel.innerHTML = '<option value="all">كل الدوامات</option>' + arr.map(x => `<option value="${escapeHtml(x)}">${x === 'none' ? 'بدون دوام' : '🕒 ' + escapeHtml(x)}</option>`).join('');
+  sel.value = arr.includes(cur) ? cur : 'all';
+}
+function qmSetView(v) {
+  qm.view = v;
+  document.getElementById('queueMonitorList').style.display = v === 'live' ? '' : 'none';
+  document.getElementById('qmPerfWrap').style.display = v === 'perf' ? '' : 'none';
+  document.getElementById('qmDateBox').style.display = v === 'perf' ? 'flex' : 'none';
+  ['live', 'perf'].forEach(x => {
+    const b = document.getElementById('qmViewBtn-' + x);
+    b.style.background = x === v ? 'var(--accent)' : ''; b.style.color = x === v ? '#fff' : '';
+  });
+  qmRefresh();
+}
+// ═══ Queue monitor: local backup + Excel export ═══
+function qmDownloadFile(name, content, mime) {
+  const blob = new Blob([content], { type: mime });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob); a.download = name;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+}
+function qmStamp() { return new Date(Date.now() + 3 * 3600e3).toISOString().slice(0, 16).replace('T', '_').replace(':', '-'); }
+function qmExportMsg(t, color) { const s = document.getElementById('qmExportStatus'); if (s) { s.textContent = t; s.style.color = color || ''; } }
+// Full copy of the live node + all saved runs history, straight from Firebase (fresh read, not the cache).
+async function qmDownloadBackup() {
+  const btn = document.getElementById('qmBackupBtn');
+  btn.disabled = true; qmExportMsg('جارِ تحميل البيانات من PocketBase...');
+  try {
+    const [emps, runs] = await Promise.all([pbList('qm_employees', '', 'name_key'), pbList('qm_runs', '', 'started_at')]);
+    const payload = {
+      _meta: { exportedAt: new Date().toISOString(), source: 'PocketBase qm_employees + qm_runs' },
+      queueMonitor: emps, queueRuns: runs
+    };
+    qmDownloadFile('queue-monitor-backup_' + qmStamp() + '.json', JSON.stringify(payload, null, 2), 'application/json');
+    qmExportMsg('✅ تم تنزيل النسخة الكاملة', '#16a34a');
+  } catch (err) {
+    console.error('[qm backup]', err);
+    qmExportMsg('❌ فشل التنزيل: ' + (err.message || err.code), '#dc2626');
+  } finally { btn.disabled = false; }
+}
+function qmFlat(obj, prefix, out) {
+  out = out || {};
+  Object.keys(obj || {}).forEach(k => {
+    const v = obj[k], key = prefix ? prefix + '.' + k : k;
+    if (v && typeof v === 'object') {
+      if (k === 'warnings') out[key + '.count'] = Object.keys(v).length;
+      else qmFlat(v, key, out);
+    } else out[key] = v;
+  });
+  return out;
+}
+function qmCell(v) {
+  if (v === null || v === undefined) return '';
+  if (typeof v === 'number' && v > 1e12 && v < 4e12) v = new Date(v + 3 * 3600e3).toISOString().slice(0, 19).replace('T', ' '); // timestamp → Baghdad time
+  if (typeof v === 'boolean') v = v ? 'نعم' : 'لا';
+  return '"' + String(v).replace(/"/g, '""') + '"';
+}
+function qmToCsv(rows) {
+  const cols = []; rows.forEach(r => Object.keys(r).forEach(k => { if (!cols.includes(k)) cols.push(k); }));
+  const lines = [cols.map(qmCell).join(',')];
+  rows.forEach(r => lines.push(cols.map(c => qmCell(r[c])).join(',')));
+  return '\uFEFF' + lines.join('\r\n'); // BOM so Excel reads Arabic correctly
+}
+// Exports what the current view shows: live employees, or the saved runs for the selected date range.
+async function qmExportCsv() {
+  try {
+    let rows, name;
+    if (qm.view === 'perf') {
+      if (!qm.cache) { qmExportMsg('⏳ اعرض الفترة أولاً ثم صدّر', '#b45309'); return; }
+      rows = qm.cache.runs.filter(r => qmPass(r.shift, r.name)).map(r => ({ employeeKey: r.key, ...qmFlat(r) }));
+      name = 'queue-runs_' + (document.getElementById('qmFrom').value || '') + '_' + (document.getElementById('qmTo').value || '');
+    } else {
+      const data = window._qmData || _qmTreeData || {};
+      rows = Object.keys(data).filter(k => k.charAt(0) !== '_' && data[k] && typeof data[k] === 'object' && qmPass(data[k].shift, data[k].name))
+        .map(k => ({ employeeKey: k, ...qmFlat(data[k]) }));
+      name = 'queue-live_' + qmStamp();
+    }
+    if (!rows.length) { qmExportMsg('لا توجد بيانات للتصدير', '#b45309'); return; }
+    qmDownloadFile(name + '.csv', qmToCsv(rows), 'text/csv;charset=utf-8');
+    qmExportMsg('✅ تم التصدير (' + rows.length + ' سجل)', '#16a34a');
+  } catch (err) {
+    console.error('[qm export]', err);
+    qmExportMsg('❌ فشل التصدير: ' + (err.message || err), '#dc2626');
+  }
+}
+function qmRefresh() {
+  if (qm.view === 'live') { if (window._qmData) renderQueueMonitorTable(window._qmData); }
+  else loadQmPerf();
+}
+function qmRunLabel(emp, count) {
+  let h = '';
+  const r = emp.run, l = emp.lastRun;
+  if (r && r.startedAt) h += `<div style="font-size:0.72rem;color:#2563eb;margin-top:2px;">🔄 ${r.startCount}${r.taken > r.startCount ? '+' : ''} ← ${count} منذ ${qmDur(Date.now() - r.startedAt)}${r.partial ? ' ~' : ''}</div>`;
+  if (l) h += `<div style="font-size:0.72rem;color:${l.status === 'completed' ? '#166534' : '#b45309'};margin-top:2px;">${l.status === 'completed' ? '✅ آخر دورة: ' + l.taken + ' ← 0 خلال ' + qmDur(l.durationMs) : '⚠️ دورة لم تكتمل'}</div>`;
+  return h;
+}
+async function loadQmPerf() {
+  const wrap = document.getElementById('qmPerfWrap');
+  const fe = document.getElementById('qmFrom'), te = document.getElementById('qmTo');
+  if (!fe.value) fe.value = qmToday();
+  if (!te.value) te.value = fe.value;
+  let from = fe.value, to = te.value; if (from > to) [from, to] = [to, from];
+  const fullSpanDays = Math.round((Date.parse(to + 'T00:00:00Z') - Date.parse(from + 'T00:00:00Z')) / 864e5) + 1;
+  const days = [];
+  for (let t = Date.parse(from + 'T00:00:00Z'), e = Date.parse(to + 'T00:00:00Z'); t <= e && days.length < 31; t += 864e5) days.push(new Date(t).toISOString().slice(0, 10));
+  const rangeTruncated = fullSpanDays > days.length;
+  const ck = days[0] + '_' + days.length;
+  if (!qm.cache || qm.cache.key !== ck) {
+    wrap.innerHTML = '<div style="text-align:center;color:#94a3b8;padding:16px;">جارِ التحميل...</div>';
+    try {
+      const rows = await pbList('qm_runs', `date_key>=${pbQ(days[0])} && date_key<=${pbQ(days[days.length - 1])}`, 'started_at');
+      const runs = rows.map(r => ({
+        key: r.name_key, name: r.name, startedAt: r.started_at, endedAt: r.ended_at, durationMs: r.duration_ms,
+        breakMs: r.break_ms, startCount: r.start_count, taken: r.taken, peak: r.peak, remaining: r.remaining,
+        status: r.status, partial: !!r.partial, shift: r.shift || undefined
+      }));
+      // Safety net for records written before the relay's per-employee lock fix:
+      // two tabs of the same employee could each log the SAME real batch as its
+      // own run — that happens within seconds of each other (both tabs see the
+      // same 0-count report), with near-identical durations. The old check only
+      // compared startCount within a 5-minute window, which also silently
+      // swallowed genuine, distinct runs whenever an employee happened to get
+      // two same-size batches (e.g. the same fair-share number) back to back —
+      // a normal occurrence, not a duplicate report. Requiring the durations to
+      // match too (not just the start count), inside a much tighter 20-second
+      // window, makes this specific to actual duplicate reports of one event.
+      runs.sort((a, b) => a.key === b.key ? a.startedAt - b.startedAt : (a.key < b.key ? -1 : 1));
+      const deduped = [];
+      for (const r of runs) {
+        const p = deduped[deduped.length - 1];
+        const dup = p && p.key === r.key && p.startCount === r.startCount &&
+          Math.abs(r.startedAt - p.startedAt) < 20 * 1000 &&
+          Math.abs((r.durationMs || 0) - (p.durationMs || 0)) < 5 * 1000;
+        if (dup) { if (r.startedAt < p.startedAt) deduped[deduped.length - 1] = r; }
+        else deduped.push(r);
+      }
+      qm.cache = { key: ck, runs: deduped };
+    } catch (err) {
+      wrap.innerHTML = `<div style="text-align:center;color:#dc2626;padding:16px;">تعذّر التحميل: ${escapeHtml(err.message || err.code)}<br><span style="font-size:0.8rem;color:#94a3b8;">تأكد من اتصال PocketBase وصلاحية qm_runs</span></div>`;
+      return;
+    }
+  }
+  qmFillShifts(qm.cache.runs.map(r => r.shift || 'none'));
+  const runs = qm.cache.runs.filter(r => qmPass(r.shift, r.name)).sort((a, b) => b.startedAt - a.startedAt);
+  if (!runs.length) { wrap.innerHTML = '<div style="text-align:center;color:#94a3b8;padding:16px;">لا توجد دورات في هذه الفترة.</div>'; return; }
+  const eff = r => Math.max(0, (r.durationMs || 0) - (r.breakMs || 0)); // net of استراحة
+  const by = {};
+  runs.forEach(r => {
+    const a = by[r.key] || (by[r.key] = { name: r.name || r.key, n: 0, taken: 0, ok: [], bad: 0 });
+    a.n++; a.taken += r.taken || 0;
+    if (r.status === 'completed' && !r.partial) a.ok.push(r); else a.bad++;
+  });
+  const th = 'padding:8px;text-align:center', td = 'padding:6px;text-align:center';
+  const sum = Object.values(by).sort((a, b) => b.taken - a.taken).map(a => {
+    const t = a.ok.reduce((x, r) => x + eff(r), 0), o = a.ok.reduce((x, r) => x + (r.taken || 0), 0), e = a.ok.map(eff);
+    return `<tr><td style="font-weight:700;padding:6px;">${escapeHtml(a.name)}</td><td style="${td}">${a.n}</td><td style="${td}">${a.taken}</td>
+<td style="${td}">${a.ok.length ? qmDur(t / a.ok.length) : '—'}</td><td style="${td}">${o ? qmDur(t / o) : '—'}</td>
+<td style="${td}">${e.length ? qmDur(Math.min(...e)) : '—'}</td><td style="${td}">${e.length ? qmDur(Math.max(...e)) : '—'}</td>
+<td style="${td};color:${a.bad ? '#b45309' : '#94a3b8'}">${a.bad || '—'}</td></tr>`;
+  }).join('');
+  const log = runs.slice(0, 300).map(r => {
+    const st = r.status === 'completed' ? '✅' : `⚠️ متبقي ${r.remaining || 0}`;
+    return `<tr><td style="${td}">${r.dateKey || ''}</td><td style="font-weight:700;padding:6px;">${escapeHtml(r.name || r.key)}</td>
+<td style="${td};font-size:0.78rem;">${r.shift ? escapeHtml(r.shift) : '—'}</td>
+<td style="${td}">${new Date(r.startedAt).toLocaleTimeString('ar-IQ-u-nu-latn', { hour: '2-digit', minute: '2-digit' })}</td>
+<td style="${td}"><b>${r.startCount}</b>${r.taken > r.startCount ? ' (+' + (r.taken - r.startCount) + ')' : ''} ← 0</td>
+<td style="${td}">${qmDur(r.durationMs || 0)}</td><td style="${td};color:#94a3b8;">${r.breakMs ? qmDur(r.breakMs) : '—'}</td>
+<td style="${td}" title="${r.partial ? 'بداية الدورة غير مرصودة بدقة — لا تدخل في المتوسطات' : ''}">${st}${r.partial ? ' ~' : ''}</td></tr>`;
+  }).join('');
+  const hd = 'text-align:right;color:#64748b;font-size:0.8rem;';
+  const rangeWarning = rangeTruncated
+    ? `<div style="background:#fef3c7;color:#92400e;border-radius:8px;padding:8px 12px;font-size:0.78rem;font-weight:700;margin-bottom:10px;">⚠️ الفترة المختارة ${fullSpanDays} يومًا، لكن يتم عرض أول 31 يومًا فقط (${days[0]} ← ${days[days.length - 1]}) — ضيّق النطاق لرؤية الأيام المتبقية.</div>`
+    : '';
+  const logTruncated = runs.length > 300;
+  wrap.innerHTML = rangeWarning + `<div style="font-weight:800;margin:6px 0;">ملخص الأداء</div>
+<div style="overflow-x:auto"><table class="table" style="width:100%;border-collapse:collapse;"><thead><tr style="${hd}"><th style="padding:8px">الموظف</th><th style="${th}">دورات</th><th style="${th}">طلبات</th><th style="${th}">متوسط الدورة</th><th style="${th}">متوسط/طلب</th><th style="${th}">أسرع</th><th style="${th}">أبطأ</th><th style="${th}">غير مكتملة</th></tr></thead><tbody>${sum}</tbody></table></div>
+<div style="font-size:0.72rem;color:#94a3b8;margin:4px 0 14px;">المتوسطات للدورات المكتملة فقط، بعد خصم وقت الاستراحة، وبدون الدورات التي لم تُرصد بدايتها (~).</div>
+<div style="font-weight:800;margin:6px 0;">سجل الدورات${logTruncated ? ` <span style="color:#b45309;font-weight:700;font-size:0.78rem;">(عرض أحدث 300 من أصل ${runs.length})</span>` : ''}</div>
+<div style="overflow-x:auto"><table class="table" style="width:100%;border-collapse:collapse;"><thead><tr style="${hd}"><th style="${th}">التاريخ</th><th style="padding:8px">الموظف</th><th style="${th}">الدوام</th><th style="${th}">بدأ</th><th style="${th}">الدورة</th><th style="${th}">المدة</th><th style="${th}">استراحة</th><th style="${th}">الحالة</th></tr></thead><tbody>${log}</tbody></table></div>`;
+}
+
+function renderQueueMonitorTable(data) {
+const container = document.getElementById('queueMonitorList');
+if (!container) return;
+window._qmData = data;
+qmFillShifts(Object.keys(data).filter(k => k !== '_pool' && k !== '_activeBreak').map(k => (data[k] && data[k].shiftStart && data[k].shiftEnd) ? data[k].shiftStart + '-' + data[k].shiftEnd : 'none'));
+
+// Bug fix: this is called from a listener on the WHOLE queueMonitor/{owner}
+// node (see loadQueueMonitor above), so it re-runs on any change to ANY
+// employee's data — a queueCount ticking as orders are claimed, the ~20s
+// live report every extension sends regardless of activity, lastUpdate
+// timestamps, etc. It used to rebuild the entire table via
+// container.innerHTML on every single one of those, which destroys and
+// recreates every <input> in it (the per-employee break-limit and instant-
+// message boxes) each time — silently wiping out whatever an admin was
+// mid-typing into ANY of them, even for a completely different employee
+// than the one whose data just changed, well before there was a chance to
+// click the button. Snapshotting current input values (and which one had
+// focus) before the rebuild, then writing them back into the freshly
+// created inputs afterward, keeps unsaved text alive across a repaint it
+// has nothing to do with.
+const pendingInputValues = {};
+container.querySelectorAll('input[id^="qm-breaklimit-input-"], input[id^="qm-popup-input-"], input[id^="qm-shiftstart-input-"], input[id^="qm-shiftend-input-"], input[id^="qm-warning-input-"]').forEach(el => {
+if (el.value) pendingInputValues[el.id] = el.value;
+});
+const activeEl = document.activeElement;
+const activeElId = (activeEl && typeof activeEl.id === 'string' && activeEl.id.indexOf('qm-') === 0) ? activeEl.id : null;
+const activeElSelectionStart = (activeElId && typeof activeEl.selectionStart === 'number') ? activeEl.selectionStart : null;
+// Same idea as the input snapshot above, but for which employee cards had
+// their ⚙️ controls panel expanded — otherwise every live refresh would
+// silently collapse it back shut while an admin is mid-edit.
+const openControlKeys = new Set();
+container.querySelectorAll('details.qm-card-controls[open]').forEach(el => { if (el.dataset.k) openControlKeys.add(el.dataset.k); });
+
+const keys = Object.keys(data).filter(k => k !== '_pool' && k !== '_activeBreak' && qmPass((data[k] && data[k].shiftStart && data[k].shiftEnd) ? data[k].shiftStart + '-' + data[k].shiftEnd : 'none', data[k] && data[k].name || k));
+const poolCount = (data._pool && typeof data._pool.count === 'number') ? data._pool.count : 0;
+
+const poolBanner = `<div class="qm-pool-banner">
+<span style="font-weight:700;">📦 شحنات فرعي بانتظار التدقيق:</span>
+<span style="background:#fef3c7;color:#92400e;padding:2px 12px;border-radius:20px;font-weight:800;">${poolCount}</span>
+</div>`;
+
+if (keys.length === 0) {
+container.innerHTML = poolBanner + '<div style="text-align:center;color:#94a3b8;padding:16px;">لا توجد بيانات بعد — تأكد من أن الإضافة تعمل لدى الموظفين.</div>';
+return;
+}
+
+// order: working employees first (by when they joined the queue), then everyone else
+const orderedKeys = [...keys].sort((a, b) => {
+const wa = data[a].working === true, wb = data[b].working === true;
+if (wa !== wb) return wa ? -1 : 1;
+return (data[a].queueJoinedAt || 0) - (data[b].queueJoinedAt || 0);
+});
+let queuePosition = 0;
+
+const rows = orderedKeys.map(key => {
+const emp = data[key] || {};
+const name = emp.name || key;
+const count = (typeof emp.queueCount === 'number') ? emp.queueCount : 0;
+const isWorking = !!emp.working;
+const adminForce = emp.adminForce || null;
+const off = qmOffShift(emp);
+const target = (typeof emp.targetAssign === 'number') ? emp.targetAssign : null;
+const isManual = !!emp.manualTarget;
+const lastUpdate = emp.lastUpdate ? new Date(emp.lastUpdate).toLocaleTimeString('ar-IQ-u-nu-latn') : '—';
+
+const onLeaveToday = qmIsOnLeaveToday(name);
+if (isWorking && !off && !onLeaveToday) queuePosition++;
+const posLabel = (isWorking && !off && !onLeaveToday) ? `<div style="font-size:0.72rem;color:#2563eb;margin-top:2px;">الدور: ${queuePosition}</div>` : '';
+const targetLabel = (isWorking && !off && !onLeaveToday && target != null)
+? `<div style="font-size:0.72rem;color:#0f172a;margin-top:2px;">الحصة الحالية: ${target}${isManual ? ' (يدوي)' : ''}</div>`
+: '';
+
+const breakLimit = (typeof emp.breakLimitMinutes === 'number') ? emp.breakLimitMinutes : 15; // TOTAL استراحة budget/day (minutes)
+// Bug fix: "over" used to flip true the moment mins >= breakLimit, but the
+// actual warning system (relay.js watchdog + the extension's own countdown)
+// gives a 2-minute grace period past the limit before anything is actually
+// counted as an overrun. Without matching that here, this badge showed
+// "⚠️ تجاوز" up to 2 minutes before the employee had genuinely done anything
+// wrong — an admin glancing at the dashboard could act on it prematurely.
+const QM_BREAK_GRACE_MIN = 2;
+let breakInfo = '';
+if (!isWorking && emp.breakStartedAt) {
+const mins = Math.floor((Date.now() - emp.breakStartedAt) / 60000);
+// The employee now has a single TOTAL استراحة budget for the day instead
+// of a fixed per-press limit — breakSessionStartRemainingMs is what was
+// left when THIS session began (set by the relay, see
+// handleQueueReport/serverBreakSessionStartRemainingMs), so the overrun
+// check and the "remaining" figure both track that instead of the raw
+// per-employee minutes setting.
+const sessionLimitMin = (typeof emp.breakSessionStartRemainingMs === 'number')
+? Math.round(emp.breakSessionStartRemainingMs / 60000)
+: breakLimit;
+const over = mins >= sessionLimitMin + QM_BREAK_GRACE_MIN && !off;
+const remainingTodayMin = (typeof emp.breakBudgetRemainingMs === 'number')
+? Math.max(0, Math.round(emp.breakBudgetRemainingMs / 60000))
+: null;
+breakInfo = `<div style="font-size:0.75rem;margin-top:2px;color:${over ? '#dc2626' : '#64748b'};font-weight:${over ? '800' : '400'}">
+${over ? `⚠️ تجاوز ${sessionLimitMin} دقيقة — ` : ''}منذ ${mins} دقيقة <span style="color:#94a3b8;">(هذه الجلسة: ${sessionLimitMin}د${remainingTodayMin !== null ? ` · الرصيد المتبقي اليوم: ${remainingTodayMin}د` : ''})</span>
+</div>`;
+}
+
+const shiftStart = (typeof emp.shiftStart === 'string') ? emp.shiftStart : '';
+const shiftEnd = (typeof emp.shiftEnd === 'string') ? emp.shiftEnd : '';
+const shiftLabel = (shiftStart && shiftEnd)
+? `<div style="font-size:0.72rem;color:#64748b;margin-top:2px;">🕒 الدوام: ${shiftStart} ← ${shiftEnd}</div>`
+: '<div style="font-size:0.72rem;color:#94a3b8;margin-top:2px;">🕒 لم يُحدد دوام — التتبّع فعّال دائمًا</div>';
+
+const overtimeMsToday = (emp.overtimeDate === todayDateKey() && typeof emp.overtimeMsToday === 'number') ? emp.overtimeMsToday : 0;
+const overtimeLabel = overtimeMsToday > 0
+? `<div style="font-size:0.72rem;color:#7c3aed;margin-top:2px;font-weight:700;">⏱️ إضافي اليوم: ${formatSessionDuration(overtimeMsToday)}</div>`
+: '';
+
+const statusBadge = adminForce === 'ended'
+? '<span style="background:#e2e8f0;color:#334155;padding:2px 10px;border-radius:20px;font-size:0.78rem;font-weight:700;">⏹️ انتهى الدوام</span>'
+: adminForce === 'maintenance'
+? '<span style="background:#fecaca;color:#7f1d1d;padding:2px 10px;border-radius:20px;font-size:0.78rem;font-weight:700;">🔧 صيانة</span>'
+: (isWorking && off)
+? (count > 0
+? `<span style="background:#ede9fe;color:#5b21b6;padding:2px 10px;border-radius:20px;font-size:0.78rem;font-weight:700;">🌙 إضافي — ${count} طلب</span>`
+: '<span style="background:#e2e8f0;color:#334155;padding:2px 10px;border-radius:20px;font-size:0.78rem;font-weight:700;">⏹️ خارج الدوام — بلا طلبات</span>')
+: isWorking
+? `<span style="background:#dcfce7;color:#166534;padding:2px 10px;border-radius:20px;font-size:0.78rem;font-weight:700;">يعمل — ${count} طلب</span>`
+: '<span style="background:#fef3c7;color:#92400e;padding:2px 10px;border-radius:20px;font-size:0.78rem;font-weight:700;">استراحة</span>';
+
+const forceBadge = adminForce === 'ended'
+? '<div style="font-size:0.72rem;color:#475569;margin-top:2px;font-weight:800;">⏹️ الدوام منتهٍ — لا يمكنه العودة للعمل حتى تُلغي الإجبار</div>'
+: adminForce === 'maintenance'
+? '<div style="font-size:0.72rem;color:#dc2626;margin-top:2px;font-weight:800;">⚠️ الجهاز محدد كـ صيانة — تنبيه فقط، لا يمنع الموظف فعليًا</div>'
+: adminForce
+? `<div style="font-size:0.72rem;color:#2563eb;margin-top:2px;">إجبار المشرف: ${adminForce === 'working' ? 'عمل' : 'استراحة'}</div>`
+: '';
+
+// Persistent, all-time إنذار count — automatic break-overrun warnings
+// (added server-side, see addPersistentWarning() in relay.js) and manual
+// admin-issued ones (added here via addEmployeeWarning()) both write into
+// the SAME warningCount + warnings/{pushId} fields, so there's only ever
+// one number and it is never reset by date. Today's separate
+// warningsToday/warningsDate still exists only to drive the "> 3 today =
+// تنزيل تقييم" flag below; it no longer has its own badge.
+const warnCount = (typeof emp.warningCount === 'number') ? emp.warningCount : 0;
+const todaysCount = (typeof emp.warningsToday === 'number' && emp.warningsDate === todayDateKey()) ? emp.warningsToday : 0;
+const overEval = todaysCount > 3;
+const warningEntries = emp.warnings ? Object.values(emp.warnings) : [];
+warningEntries.sort((a, b) => (a && a.createdAt || 0) - (b && b.createdAt || 0));
+const warningTooltip = warningEntries.length
+? warningEntries.map(w => {
+const when = w && w.createdAt ? new Date(w.createdAt).toLocaleString('ar-IQ-u-nu-latn') : '—';
+const reason = (w && w.text) ? w.text : ((w && w.source === 'auto') ? 'تجاوز وقت الاستراحة' : 'بدون سبب مذكور');
+return when + ' — ' + reason;
+}).join('\n')
+: 'لا توجد تفاصيل مسجلة';
+const warnBadge = warnCount > 0
+? `<span title="${escapeHtml(warningTooltip)}" style="cursor:help;background:${overEval ? '#fecaca' : '#fee2e2'};color:${overEval ? '#7f1d1d' : '#b91c1c'};padding:2px 12px;border-radius:20px;font-weight:800;font-size:0.85rem;">⚠️ ${warnCount}</span>${overEval ? '<div style="font-size:0.7rem;color:#b91c1c;margin-top:2px;font-weight:700;">تنزيل تقييم</div>' : ''}`
+: '<span style="color:#94a3b8;font-size:0.85rem;">—</span>';
+
+const todayLeaveBadge = getTodayLeaveBadgeForName(name);
+const todayLeaveRecord = (window._leavesDataCache || []).find(r => r.emp === name && r.date === qmToday());
+
+return `
+<div class="qm-card">
+<div class="qm-card-head">
+<div>
+<div class="qm-card-name" data-k="${escapeHtml(key)}" data-n="${escapeHtml(name)}" onclick="openSessionLog(this.dataset.k,this.dataset.n)" title="عرض سجل أوقات العمل والاستراحة">${escapeHtml(name)}</div>
+<div class="qm-card-badges" style="margin-top:4px">${todayLeaveBadge}${posLabel}${targetLabel}</div>
+</div>
+<span class="qm-card-count${count > 0 ? ' has-orders' : ''}">${count} طلب</span>
+</div>
+
+<div class="qm-card-badges">
+${statusBadge}
+<span style="color:#64748b;font-size:0.78rem;">🕒 آخر تحديث: ${lastUpdate}</span>
+</div>
+
+<div class="qm-card-meta">
+${breakInfo}${forceBadge}${shiftLabel}${overtimeLabel}${qmRunLabel(emp, count)}
+</div>
+
+<div class="qm-card-warn">
+<span style="font-size:0.78rem;color:#64748b;">الإنذارات:</span> ${warnBadge}
+${qmCanEdit && warnCount > 0 ? `<button class="btn" style="padding:4px 10px;font-size:0.74rem;" onclick="resetEmployeeWarnings('${key}')" title="تصفير كل الإنذارات (التلقائية واليدوية) وسجلّها">🧹 تصفير</button>` : ''}
+</div>
+
+${!qmCanEdit ? '' : `<details class="qm-card-controls" data-k="${escapeHtml(key)}" ${openControlKeys.has(key) ? 'open' : ''}>
+<summary>التحكم اليدوي</summary>
+<div class="qm-card-controls-body">
+<div class="qm-actions-row">
+<button class="btn" style="padding:5px 10px;font-size:0.78rem;" onclick="forceEmployeeState('${key}','working')">إجبار عمل</button>
+<button class="btn" style="padding:5px 10px;font-size:0.78rem;" onclick="forceEmployeeState('${key}','break')">إجبار استراحة</button>
+<button class="btn" style="padding:5px 10px;font-size:0.78rem;background:${adminForce === 'ended' ? '#475569' : ''};color:${adminForce === 'ended' ? '#fff' : ''};" onclick="if(confirm('إنهاء الدوام لهذا الموظف؟ لن يتمكن من العودة للعمل حتى تُلغي الإجبار.')) forceEmployeeState('${key}','ended')" title="يوقفه عن العمل ويمنعه من الضغط على بدء العمل حتى تُلغي الإجبار">⏹️ إنهاء الدوام</button>
+<button class="btn" style="padding:5px 10px;font-size:0.78rem;background:${adminForce === 'maintenance' ? '#dc2626' : ''};color:${adminForce === 'maintenance' ? '#fff' : ''};" onclick="forceEmployeeState('${key}','maintenance')" title="علامة/تنبيه فقط — لا يمنع الموظف من العمل فعليًا">🔧 صيانة</button>
+${adminForce ? `<button class="btn" style="padding:5px 10px;font-size:0.78rem;" onclick="forceEmployeeState('${key}',null)">إلغاء الإجبار</button>` : ''}
+</div>
+<div class="qm-input-row" title="إجمالي رصيد الاستراحة بالدقائق لهذا الموظف لكل يوم (وليس مدة كل ضغطة — الموظف يستهلك من نفس الرصيد على عدة ضغطات ويكمل من حيث توقف)">
+<input id="qm-breaklimit-input-${key}" type="number" min="1" placeholder="${breakLimit}" style="width:64px">
+<button class="btn" style="padding:4px 8px;font-size:0.75rem;" onclick="setBreakLimit('${key}')">⏱️ رصيد الاستراحة اليومي</button>
+<button class="btn" style="padding:4px 8px;font-size:0.75rem;" title="يعيد الرصيد المتبقي اليوم لهذا الموظف إلى الحد الكامل" onclick="resetEmployeeBreakBudget('${key}')">🔄 تصفير الاستهلاك</button>
+</div>
+<div class="qm-input-row" title="بداية ونهاية الدوام لهذا الموظف — خارج هذه الفترة لا تُحتسب استراحة/تحذيرات، وأي عمل فعلي يُسجَّل كإضافي">
+<input id="qm-shiftstart-input-${key}" type="time" value="${shiftStart}">
+<span style="color:#94a3b8;font-size:0.75rem;">←</span>
+<input id="qm-shiftend-input-${key}" type="time" value="${shiftEnd}">
+<button class="btn" style="padding:4px 8px;font-size:0.75rem;" onclick="setEmployeeShift('${key}')">🕒 حفظ الدوام</button>
+</div>
+<div class="qm-actions-row" title="يسجّل الموظف كغائب اليوم (إجازة كاملة أو زمنية جزئية) — يُستبعد تلقائيًا من عداد الدور وتوزيع الحصص لهذا اليوم، ويظهر في سجل الإجازات">
+<button class="btn" style="padding:5px 10px;font-size:0.78rem;${todayLeaveRecord && todayLeaveRecord.type === 'اجازة' ? 'background:#dbeafe;color:#1e40af;' : ''}" onclick="qmSetTodayLeaveFromCard('${key}','اجازة')">🏖️ إجازة اليوم</button>
+<button class="btn" style="padding:5px 10px;font-size:0.78rem;${todayLeaveRecord && todayLeaveRecord.type === 'زمنية' ? 'background:#ffedd5;color:#9a3412;' : ''}" onclick="qmSetTodayLeaveFromCard('${key}','زمنية')">⏰ زمنية اليوم</button>
+${todayLeaveRecord ? `<button class="btn" style="padding:5px 10px;font-size:0.78rem;" onclick="qmClearTodayLeaveFromCard('${key}')">❌ إلغاء</button>` : ''}
+</div>
+<div class="qm-input-row">
+<input id="qm-popup-input-${key}" type="text" placeholder="رسالة فورية...">
+<button class="btn" style="padding:4px 8px;font-size:0.75rem;" onclick="sendEmployeePopup('${key}')">📢 إرسال</button>
+</div>
+${emp.popup && emp.popup.id
+? `<div style="font-size:0.72rem;color:#b45309;margin:2px 0 6px;" title="${escapeHtml(emp.popup.text || '')}">⏳ بانتظار القراءة: «${escapeHtml((emp.popup.text || '').slice(0, 40))}${(emp.popup.text || '').length > 40 ? '…' : ''}»</div>`
+: (emp.lastPopupAck && emp.lastPopupAck.ackedAt
+? `<div style="font-size:0.72rem;color:#16a34a;margin:2px 0 6px;" title="${escapeHtml(emp.lastPopupAck.text || '')}">✅ قُرئت الساعة ${new Date(emp.lastPopupAck.ackedAt).toLocaleTimeString('ar-IQ-u-nu-latn')}</div>`
+: '')}
+<div class="qm-input-row" title="إضافة إنذار لهذا الموظف — يُضاف لنفس عداد الإنذارات التلقائية، ويظهر سببه عند تمرير الفأرة فوق الشارة">
+<input id="qm-warning-input-${key}" type="text" placeholder="سبب الإنذار (اختياري)...">
+<button class="btn" style="padding:4px 8px;font-size:0.75rem;background:#fef3c7;color:#92400e;" onclick="addEmployeeWarning('${key}')">⚠️ إضافة إنذار</button>
+</div>
+</div>
+</details>`}
+</div>`;
+}).join('');
+
+container.innerHTML = poolBanner + `<div class="qm-grid">${rows}</div>`;
+
+// Restore whatever was snapshotted above — the card layout is the same
+// each render, so the same ids exist on the freshly created inputs.
+Object.keys(pendingInputValues).forEach(id => {
+const el = document.getElementById(id);
+if (el) el.value = pendingInputValues[id];
+});
+if (activeElId) {
+const el = document.getElementById(activeElId);
+if (el) {
+el.focus();
+if (activeElSelectionStart !== null && el.setSelectionRange) {
+try { el.setSelectionRange(activeElSelectionStart, activeElSelectionStart); } catch (e) { /* ignore */ }
+}
+}
+}
+}
+
+// Per-employee break duration (minutes). Read by the extension via
+// GET /queuemonitor/state (breakLimitMinutes) and used instead of its
+// own 15-min default — lets a manager shorten/extend break time for a
+// specific person depending on current load.
+// ═══ Employee session log (work/break history) ═══
+// Reads queueSessions/{owner}/{employeeKey} — each child is one closed
+// session: { type: 'work'|'break', startedAt, endedAt }, written by the
+// relay when it receives a POST to /queuemonitor/session from the
+// extension's setWorking() transitions. Requires that relay-side handler
+// to exist (not part of this file) for any data to show up here.
+
+function formatSessionDuration(ms) {
+const totalMin = Math.max(0, Math.round(ms / 60000));
+const h = Math.floor(totalMin / 60), m = totalMin % 60;
+return h > 0 ? `${h} س ${m} د` : `${m} د`;
+}
+
+function openSessionLog(employeeKey, employeeName) {
+const overlay = document.getElementById('sessionLogModalOverlay');
+const title = document.getElementById('sessionLogModalTitle');
+const list = document.getElementById('sessionLogModalList');
+title.textContent = 'سجل أوقات العمل والاستراحة — ' + employeeName;
+list.innerHTML = '<div style="text-align:center;color:#94a3b8;padding:16px;">جارِ التحميل...</div>';
+overlay.style.display = 'flex';
+
+pbList('qm_sessions', 'name_key=' + pbQ(employeeKey), '-started_at', { single: true, perPage: 100 }).then(rows => {
+const sessions = rows.map(r => ({ type: r.type, startedAt: r.started_at, endedAt: r.ended_at }));
+sessions.sort((a, b) => (b.startedAt || 0) - (a.startedAt || 0));
+
+if (!sessions.length) {
+list.innerHTML = '<div style="text-align:center;color:#94a3b8;padding:16px;">لا يوجد سجل بعد لهذا الموظف</div>';
+return;
+}
+
+list.innerHTML = sessions.map(s => {
+const isWork = s.type === 'work';
+const start = s.startedAt ? new Date(s.startedAt).toLocaleString('ar-IQ-u-nu-latn') : '—';
+const end = s.endedAt ? new Date(s.endedAt).toLocaleTimeString('ar-IQ-u-nu-latn') : 'جارٍ الآن';
+const dur = s.endedAt && s.startedAt ? formatSessionDuration(s.endedAt - s.startedAt) : '—';
+return `<div style="padding:10px 12px;border-bottom:1px solid #f0f1f4;display:flex;justify-content:space-between;align-items:center;gap:10px;">
+<div style="font-size:0.82rem;line-height:1.6;">
+<span style="background:${isWork ? '#dcfce7' : '#fef3c7'};color:${isWork ? '#166534' : '#92400e'};padding:2px 10px;border-radius:20px;font-weight:700;font-size:0.78rem;">${isWork ? 'عمل' : 'استراحة'}</span>
+<div style="color:#4b5563;margin-top:4px;">${start} ← ${end}</div>
+</div>
+<div style="font-weight:800;color:#0f172a;white-space:nowrap;">${dur}</div>
+</div>`;
+}).join('');
+}).catch(err => {
+list.innerHTML = '<div style="text-align:center;color:#dc2626;padding:16px;">تعذر تحميل السجل: ' + escapeHtml(err.message) + '</div>';
+});
+}
+
+function closeSessionLog() {
+document.getElementById('sessionLogModalOverlay').style.display = 'none';
+}
+
+function setBreakLimit(employeeKey) {
+if (!qmCanEdit) { alert('🚫 صلاحيتك عرض فقط.'); return; }
+const input = document.getElementById('qm-breaklimit-input-' + employeeKey);
+if (!input) return;
+const n = parseInt(input.value, 10);
+if (isNaN(n) || n <= 0) { alert('أدخل عدد دقائق صحيح'); return; }
+qmPatchEmp(employeeKey, { breakLimitMinutes: n })
+.then(() => { input.value = ''; })
+.catch(err => alert('فشل تنفيذ الأمر: ' + err.message));
+}
+
+// Restores an employee's remaining استراحة balance for today back to the full
+// daily limit. Like resetWarningsAt, the extension owns the live balance and
+// re-reports it constantly, so a direct write to breakBudgetRemainingMs would
+// be overwritten — instead we stamp resetBreakBudgetAt and the extension
+// (pollAdminForce) applies it once when it sees a newer timestamp.
+function resetEmployeeBreakBudget(employeeKey) {
+if (!qmCanEdit) { alert('🚫 صلاحيتك عرض فقط.'); return; }
+if (!confirm('تصفير استهلاك الاستراحة لهذا الموظف وإرجاع رصيده المتبقي اليوم إلى الحد الكامل؟')) return;
+qmPatchEmp(employeeKey, { resetBreakBudgetAt: Date.now() })
+.catch(err => alert('فشل تنفيذ الأمر: ' + err.message));
+}
+
+// Per-employee shift window ("HH:MM" strings, employee's own local clock).
+// Read by the extension via GET /queuemonitor/state (shiftStart/shiftEnd)
+// — see isWithinShift() in content-queuemonitor.js. Outside this window
+// the extension stops running away/warning tracking entirely; if the
+// employee is still actively working outside it, that time is logged as
+// overtime instead (emp.overtimeMsToday, shown next to the shift label
+// above) rather than penalized. Leave both fields empty to disable the
+// restriction for that employee (tracking always on, the old behavior).
+function setEmployeeShift(employeeKey) {
+if (!qmCanEdit) { alert('🚫 صلاحيتك عرض فقط.'); return; }
+const startInput = document.getElementById('qm-shiftstart-input-' + employeeKey);
+const endInput = document.getElementById('qm-shiftend-input-' + employeeKey);
+if (!startInput || !endInput) return;
+const start = startInput.value;
+const end = endInput.value;
+if (!start && !end) {
+// both cleared — explicitly disable the restriction for this employee
+qmPatchEmp(employeeKey, { shiftStart: null, shiftEnd: null })
+.catch(err => alert('فشل تنفيذ الأمر: ' + err.message));
+return;
+}
+if (!start || !end) { alert('أدخل وقت البداية والنهاية معًا، أو اتركهما فارغين لإلغاء تحديد الدوام'); return; }
+if (start === end) { alert('وقت البداية والنهاية لا يمكن أن يكونا متطابقين'); return; }
+qmPatchEmp(employeeKey, { shiftStart: start, shiftEnd: end })
+.catch(err => alert('فشل تنفيذ الأمر: ' + err.message));
+}
+
+// Resets ALL of an employee's إنذارات back to zero: the persistent,
+// never-expiring warningCount/warnings log (automatic + manual combined,
+// see addEmployeeWarning below and addPersistentWarning() in relay.js)
+// AND today's warningsToday/warningsDate that still drives the "> 3 today
+// = تنزيل تقييم" flag. warningsToday can't be zeroed with a direct write
+// here — the extension re-reports its own local count every ~20s and
+// would clobber it right back — so that part still goes through the
+// resetWarningsAt timestamp the extension/relay already watch for (see
+// /queuemonitor/state in relay.js). warningCount and warnings/, which
+// nothing else ever overwrites, are cleared directly.
+function resetEmployeeWarnings(employeeKey) {
+if (!qmCanEdit) { alert('🚫 صلاحيتك عرض فقط.'); return; }
+if (!confirm('تصفير كل إنذارات هذا الموظف (التلقائية واليدوية) وسجلّها بالكامل؟')) return;
+qmPatchEmp(employeeKey, { resetWarningsAt: Date.now(), warningCount: 0 })
+.then(() => pbList('qm_warnings', 'name_key=' + pbQ(employeeKey), '', { fields: 'id' }))
+.then(rows => Promise.all(rows.map(w => pbFetch('qm_warnings/records/' + w.id, { method: 'DELETE' }))))
+.then(() => { if (_qmTreeData[employeeKey]) { _qmTreeData[employeeKey].warnings = undefined; renderQueueMonitorTable(_qmTreeData); } })
+.catch(err => alert('فشل تنفيذ الأمر: ' + err.message));
+}
+
+// Manual إنذار from the dashboard. Writes into the SAME warningCount +
+// warnings/{pushId} fields the automatic break-overrun warnings use (see
+// addPersistentWarning() in relay.js) — there is only one إنذار system,
+// not a separate manual one — so a manual warning shows up in exactly the
+// same badge and hover tooltip as an automatic one. warningCount is
+// incremented via a transaction so two admins clicking at once (or a
+// double click) can't race and silently drop an increment.
+function addEmployeeWarning(employeeKey) {
+if (!qmCanEdit) { alert('🚫 صلاحيتك عرض فقط.'); return; }
+const input = document.getElementById('qm-warning-input-' + employeeKey);
+const reason = input ? (input.value || '').trim() : '';
+if (!confirm('إضافة إنذار لهذا الموظف؟' + (reason ? ('\n\nالسبب: ' + reason) : ''))) return;
+// The employee sees this as the persistent ⚠️ badge next to their toggle
+// button (qm-warning-badge in content-queuemonitor.js, fed by
+// warningCount via /queuemonitor/state) — not a popup.
+pbFetch('qm_warnings/records', { method: 'POST', body: JSON.stringify({
+name_key: employeeKey, text: reason || '', created_at: Date.now(), source: 'manual'
+}) })
+// "warning_count+" is PocketBase's atomic increment, so two admins clicking at once can't drop one
+.then(() => qmPatchEmp(employeeKey, {}, { 'warning_count+': 1 }))
+.then(() => { _qmWarnCount[employeeKey] = -1; return qmPollOnce(); })
+.then(() => { if (input) input.value = ''; })
+.catch(err => alert('فشل إضافة الإنذار: ' + err.message));
+}
+
+// Instant one-off popup message to a single employee. The extension
+// polls every few seconds and shows it as a modal as soon as it lands
+// (no read-receipt tracking like the department announcements above —
+// this is meant for quick "right now" nudges, not broadcasts).
+function sendEmployeePopup(employeeKey) {
+if (!qmCanEdit) { alert('🚫 صلاحيتك عرض فقط.'); return; }
+const input = document.getElementById('qm-popup-input-' + employeeKey);
+if (!input) return;
+const text = (input.value || '').trim();
+if (!text) { alert('اكتب نص الرسالة أولاً'); return; }
+qmPatchEmp(employeeKey, { popup: { id: Date.now(), text, createdAt: Date.now() } })
+.then(() => { input.value = ''; })
+.catch(err => alert('فشل الإرسال: ' + err.message));
+}
+
+function forceEmployeeState(employeeKey, forceValue) {
+if (!qmCanEdit) { alert('🚫 صلاحيتك عرض فقط.'); return; }
+const updates = { adminForce: forceValue };
+if (forceValue === 'working') updates.queueJoinedAt = Date.now();
+qmPatchEmp(employeeKey, updates)
+.catch(err => alert('فشل تنفيذ الأمر: ' + err.message));
+}
+
+// ═══ Quick إجازة/زمنية toggle from inside a queue-monitor card ═══
+// Writes into the SAME appData/leavesData array as the dedicated
+// "تسجيل إجازة أو زمنية" form (submitManualLeave), so it shows up in the
+// leave history and drives the existing "🏖️/⏰ اليوم" badge — this is just a
+// one-tap shortcut for "mark them off today", always dated today, with no
+// notes or زمنية hour-range (use the full form for that level of detail).
+// Looks the employee's name up from queueMonitor by key rather than passing
+// it through the onclick string, since names can contain characters (') that
+// would break inline HTML attributes.
+function qmSetTodayLeaveFromCard(employeeKey, type) {
+if (!qmCanEdit) return;
+Promise.resolve().then(() => {
+const name = (_qmTreeData[employeeKey] && _qmTreeData[employeeKey].name) || employeeKey;
+return qmApplyTodayLeave(name, type);
+}).catch(err => alert('تعذّر التسجيل: ' + (err && err.message ? err.message : err)));
+}
+
+function qmClearTodayLeaveFromCard(employeeKey) {
+if (!qmCanEdit) return;
+Promise.resolve().then(() => {
+const name = (_qmTreeData[employeeKey] && _qmTreeData[employeeKey].name) || employeeKey;
+return qmClearTodayLeave(name);
+}).catch(err => alert('تعذّر الإلغاء: ' + (err && err.message ? err.message : err)));
+}
+
+function qmApplyTodayLeave(name, type) {
+if (!qmCanEdit) return Promise.reject(new Error('صلاحيتك عرض فقط'));
+const today = qmToday();
+return fbDB.ref(dbPath('appData/leavesData')).once('value').then(lsnap => {
+let leaves = [];
+try { leaves = JSON.parse(lsnap.val() || '[]'); } catch (e) { leaves = []; }
+leaves = leaves.filter(r => !(r.emp === name && r.date === today)); // one record/day from this shortcut
+leaves.push({ emp: name, date: today, type, notes: '', id: Date.now(), zmanya_from: '', zmanya_to: '', hours: null, sickProofImage: null, addedBy: myDisplayName || 'المشرف' });
+leaves.sort((a, b) => new Date(b.date) - new Date(a.date));
+return fbDB.ref(dbPath('appData/leavesData')).set(JSON.stringify(leaves));
+}).then(() => {
+logActivity('تسجيل إجازة/زمنية من بطاقة المتابعة', `${name} — ${type} — ${today}`);
+});
+}
+
+function qmClearTodayLeave(name) {
+if (!qmCanEdit) return Promise.reject(new Error('صلاحيتك عرض فقط'));
+const today = qmToday();
+return fbDB.ref(dbPath('appData/leavesData')).once('value').then(lsnap => {
+let leaves = [];
+try { leaves = JSON.parse(lsnap.val() || '[]'); } catch (e) { leaves = []; }
+const before = leaves.length;
+leaves = leaves.filter(r => !(r.emp === name && r.date === today));
+if (leaves.length === before) return;
+return fbDB.ref(dbPath('appData/leavesData')).set(JSON.stringify(leaves)).then(() => {
+logActivity('إلغاء إجازة/زمنية اليوم من بطاقة المتابعة', `${name} — ${today}`);
+});
+});
+}
+
+
+// ═══ Auth gate + boot: workspace admin = full control; staff need systems.queueMonitor = 'view' (read-only) or 'edit' (full control) ═══
+function boot() {
+document.getElementById('roleNotice').style.display = 'none';
+document.getElementById('adminRoot').style.display = 'block';
+if (!qmCanEdit) {
+const b = document.getElementById('qmModeBadge'); if (b) b.style.display = 'inline-block';
+const h = document.getElementById('qmEditHint'); if (h) h.style.display = 'none';
+}
+loadQueueMonitor();
+qmSetView('live');
+}
+
+fbAuth.onAuthStateChanged(function (user) {
+if (!user) {
+document.getElementById('roleNotice').textContent = 'الرجاء تسجيل الدخول أولاً';
+return;
+}
+fbDB.ref('admins/' + user.uid).once('value').then(adminSnap => {
+if (adminSnap.val() === true) {
+isAdmin = true;
+qmCanEdit = true;
+myWorkspaceOwner = user.uid;
+myDisplayName = (fbAuth.currentUser && fbAuth.currentUser.displayName) || 'المشرف';
+boot();
+return;
+}
+fbDB.ref('memberIndex/' + user.uid).once('value').then(idxSnap => {
+const owner = idxSnap.val();
+if (!owner) { document.getElementById('roleNotice').textContent = '🚫 ليس لديك صلاحية الوصول.'; return; }
+myWorkspaceOwner = owner;
+staffMemberRef(user.uid).once('value').then(pSnap => {
+const p = pSnap.val() || {};
+const sys = computeMemberSystems(p);
+if (!sys.queueMonitor || sys.queueMonitor === 'none') {
+document.getElementById('roleNotice').textContent = '🚫 ليس لديك صلاحية الوصول.';
+return;
+}
+myDisplayName = p.name || p.phone || '';
+qmCanEdit = (sys.queueMonitor === 'edit');
+boot();
+});
+});
+});
+});
+</script>
+<div id="sessionLogModalOverlay" style="display:none;position:fixed;inset:0;background:rgba(15,23,42,0.5);z-index:9999;align-items:center;justify-content:center;padding:16px">
+<div style="background:#fff;border-radius:12px;padding:20px;width:100%;max-width:420px;max-height:80vh;display:flex;flex-direction:column;gap:12px">
+<div id="sessionLogModalTitle" style="font-weight:800;font-size:0.95rem;color:var(--text-main)">سجل الموظف</div>
+<div id="sessionLogModalList" style="overflow-y:auto;max-height:400px"></div>
+<div style="display:flex;justify-content:flex-end;">
+<button onclick="closeSessionLog()" class="btn" style="padding:6px 14px;font-size:0.8rem">إغلاق</button>
+</div>
+</div>
+</div>
+</body>
+</html>
