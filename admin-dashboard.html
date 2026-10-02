@@ -924,6 +924,11 @@ padding: 9px 14px;
 <input id="qmNameFilter" type="text" placeholder="🔍 اسم الموظف" oninput="qmRefresh()">
 <span id="qmDateBox" style="display:none;align-items:center;gap:6px;font-size:0.82rem;flex-wrap:wrap">من <input type="date" id="qmFrom" onchange="qmRefresh()"> إلى <input type="date" id="qmTo" onchange="qmRefresh()"> <button class="btn" style="padding:4px 10px;" onclick="qm.cache=null;qmRefresh()">🔄</button></span>
 </div>
+<div class="leave-filter-bar" style="margin-top:6px;">
+<button class="btn" id="qmBackupBtn" onclick="qmDownloadBackup()">💾 تنزيل نسخة كاملة (JSON)</button>
+<button class="btn" id="qmExportBtn" onclick="qmExportCsv()">📊 تصدير إلى Excel</button>
+<span id="qmExportStatus" style="font-size:0.8rem;font-weight:700;color:var(--text-muted)"></span>
+</div>
 <div id="queueMonitorList">
 <div style="text-align:center;color:#94a3b8;padding:16px;">جارِ التحميل...</div>
 </div>
@@ -3444,6 +3449,82 @@ function qmSetView(v) {
     b.style.background = x === v ? 'var(--accent)' : ''; b.style.color = x === v ? '#fff' : '';
   });
   qmRefresh();
+}
+// ═══ Queue monitor: local backup + Excel export ═══
+function qmDownloadFile(name, content, mime) {
+  const blob = new Blob([content], { type: mime });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob); a.download = name;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+}
+function qmStamp() { return new Date(Date.now() + 3 * 3600e3).toISOString().slice(0, 16).replace('T', '_').replace(':', '-'); }
+function qmExportMsg(t, color) { const s = document.getElementById('qmExportStatus'); if (s) { s.textContent = t; s.style.color = color || ''; } }
+// Full copy of the live node + all saved runs history, straight from Firebase (fresh read, not the cache).
+async function qmDownloadBackup() {
+  const btn = document.getElementById('qmBackupBtn');
+  btn.disabled = true; qmExportMsg('جارِ تحميل البيانات من Firebase...');
+  try {
+    const [live, runs] = await Promise.all([
+      queueMonitorRef().once('value'),
+      fbDB.ref('queueRuns/' + myWorkspaceOwner).once('value')
+    ]);
+    const payload = {
+      _meta: { exportedAt: new Date().toISOString(), workspaceOwner: myWorkspaceOwner, source: 'queueMonitor + queueRuns' },
+      queueMonitor: live.val() || {},
+      queueRuns: runs.val() || {}
+    };
+    qmDownloadFile('queue-monitor-backup_' + qmStamp() + '.json', JSON.stringify(payload, null, 2), 'application/json');
+    qmExportMsg('✅ تم تنزيل النسخة الكاملة', '#16a34a');
+  } catch (err) {
+    console.error('[qm backup]', err);
+    qmExportMsg('❌ فشل التنزيل: ' + (err.message || err.code), '#dc2626');
+  } finally { btn.disabled = false; }
+}
+function qmFlat(obj, prefix, out) {
+  out = out || {};
+  Object.keys(obj || {}).forEach(k => {
+    const v = obj[k], key = prefix ? prefix + '.' + k : k;
+    if (v && typeof v === 'object') {
+      if (k === 'warnings') out[key + '.count'] = Object.keys(v).length;
+      else qmFlat(v, key, out);
+    } else out[key] = v;
+  });
+  return out;
+}
+function qmCell(v) {
+  if (v === null || v === undefined) return '';
+  if (typeof v === 'number' && v > 1e12 && v < 4e12) v = new Date(v + 3 * 3600e3).toISOString().slice(0, 19).replace('T', ' '); // timestamp → Baghdad time
+  if (typeof v === 'boolean') v = v ? 'نعم' : 'لا';
+  return '"' + String(v).replace(/"/g, '""') + '"';
+}
+function qmToCsv(rows) {
+  const cols = []; rows.forEach(r => Object.keys(r).forEach(k => { if (!cols.includes(k)) cols.push(k); }));
+  const lines = [cols.map(qmCell).join(',')];
+  rows.forEach(r => lines.push(cols.map(c => qmCell(r[c])).join(',')));
+  return '\uFEFF' + lines.join('\r\n'); // BOM so Excel reads Arabic correctly
+}
+// Exports what the current view shows: live employees, or the saved runs for the selected date range.
+async function qmExportCsv() {
+  try {
+    let rows, name;
+    if (qm.view === 'perf') {
+      if (!qm.cache) { qmExportMsg('⏳ اعرض الفترة أولاً ثم صدّر', '#b45309'); return; }
+      rows = qm.cache.runs.filter(r => qmPass(r.shift, r.name)).map(r => ({ employeeKey: r.key, ...qmFlat(r) }));
+      name = 'queue-runs_' + (document.getElementById('qmFrom').value || '') + '_' + (document.getElementById('qmTo').value || '');
+    } else {
+      const data = window._qmData || _qmTreeData || {};
+      rows = Object.keys(data).filter(k => k.charAt(0) !== '_' && data[k] && typeof data[k] === 'object' && qmPass(data[k].shift, data[k].name))
+        .map(k => ({ employeeKey: k, ...qmFlat(data[k]) }));
+      name = 'queue-live_' + qmStamp();
+    }
+    if (!rows.length) { qmExportMsg('لا توجد بيانات للتصدير', '#b45309'); return; }
+    qmDownloadFile(name + '.csv', qmToCsv(rows), 'text/csv;charset=utf-8');
+    qmExportMsg('✅ تم التصدير (' + rows.length + ' سجل)', '#16a34a');
+  } catch (err) {
+    console.error('[qm export]', err);
+    qmExportMsg('❌ فشل التصدير: ' + (err.message || err), '#dc2626');
+  }
 }
 function qmRefresh() {
   if (qm.view === 'live') { if (window._qmData) renderQueueMonitorTable(window._qmData); }
