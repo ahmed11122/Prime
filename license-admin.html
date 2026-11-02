@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html dir="rtl" lang="ar">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>Mutabaa DMS — لوحة التراخيص</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#f3f5f9;--card:#fff;--tx:#14213d;--mu:#667085;--bd:#e3e8ef;--pr:#0b5cad;--pr2:#094a8c;--ok:#1f8a3c;--bad:#d92d20;--wn:#b45309;color-scheme:light}
+@media(prefers-color-scheme:dark){:root{--bg:#0f1520;--card:#18202e;--tx:#e8edf5;--mu:#93a1b5;--bd:#2a3547;--pr:#5aa5ee;--pr2:#7bb7f2;--ok:#4cc27a;--bad:#ff6b5e;--wn:#f0a64a;color-scheme:dark}}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--tx);font-family:'Tajawal','Segoe UI',Tahoma,Arial,sans-serif;font-size:15px}
+button,input,select,textarea{font:inherit;color:inherit}
+.wrap{max-width:1180px;margin:0 auto;padding:24px 20px 60px}
+.top{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:20px;flex-wrap:wrap}
+.top h1{margin:0;font-size:22px}
+.top small{color:var(--mu);display:block;font-size:13px;margin-top:2px}
+.card{background:var(--card);border:1px solid var(--bd);border-radius:14px;padding:20px;margin-bottom:18px}
+.card h2{margin:0 0 14px;font-size:17px}
+.btn{border:0;background:var(--pr);color:#fff;border-radius:9px;padding:9px 16px;cursor:pointer;font-weight:700}
+.btn:hover{background:var(--pr2)}
+.btn.s{background:transparent;color:var(--tx);border:1px solid var(--bd);font-weight:500}
+.btn.s:hover{background:var(--bg)}
+.btn.ok{background:var(--ok)}.btn.dg{background:transparent;color:var(--bad);border:1px solid var(--bad)}
+.btn.sm{padding:5px 10px;font-size:13px;border-radius:7px}
+.btn:disabled{opacity:.55;cursor:default}
+input,select{width:100%;padding:10px 12px;border:1px solid var(--bd);border-radius:9px;background:var(--bg)}
+input:focus,select:focus{outline:2px solid var(--pr);outline-offset:-1px}
+label{display:block;font-size:13px;color:var(--mu);margin-bottom:5px}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:14px;align-items:end}
+.msg{margin-top:12px;font-size:14px;color:var(--mu);min-height:20px}
+.msg.e{color:var(--bad)}.msg.k{color:var(--ok)}
+.login{max-width:400px;margin:12vh auto 0}
+.login .card{padding:28px}
+.login input{margin-bottom:12px}
+.tools{display:flex;gap:10px;margin-bottom:14px;flex-wrap:wrap}
+.tools input{max-width:320px}
+.tw{overflow-x:auto}
+table{width:100%;border-collapse:collapse;font-size:14px}
+th{text-align:start;color:var(--mu);font-weight:500;padding:8px 10px;border-bottom:1px solid var(--bd);white-space:nowrap}
+td{padding:11px 10px;border-bottom:1px solid var(--bd);vertical-align:middle}
+tr:last-child td{border-bottom:0}
+.key{font-family:Consolas,monospace;direction:ltr;unicode-bidi:embed;background:var(--bg);padding:3px 8px;border-radius:6px;display:inline-block;letter-spacing:.3px}
+.pill{display:inline-block;padding:3px 10px;border-radius:999px;font-size:12.5px;font-weight:700;white-space:nowrap}
+.p-active{background:color-mix(in srgb,var(--ok) 16%,transparent);color:var(--ok)}
+.p-pending{background:color-mix(in srgb,var(--wn) 16%,transparent);color:var(--wn)}
+.p-expired,.p-revoked{background:color-mix(in srgb,var(--bad) 14%,transparent);color:var(--bad)}
+.p-suspended{background:color-mix(in srgb,var(--mu) 18%,transparent);color:var(--mu)}
+.act{display:flex;gap:6px;flex-wrap:wrap}
+.empty{text-align:center;color:var(--mu);padding:26px 0}
+.mo{position:fixed;inset:0;background:rgba(10,15,25,.55);display:grid;place-items:center;padding:16px;z-index:10}
+.mb{background:var(--card);border:1px solid var(--bd);border-radius:14px;padding:22px;width:min(440px,100%);max-height:90vh;overflow:auto}
+.mb h3{margin:0 0 14px}
+.row{display:flex;gap:8px;justify-content:flex-end;margin-top:16px}
+.radio{display:flex;gap:8px;align-items:center;margin:8px 0;color:var(--tx);font-size:14px;cursor:pointer}
+.radio input{width:auto}
+.newkey{display:none;margin-top:14px;padding:14px;border:1px dashed var(--ok);border-radius:10px;background:color-mix(in srgb,var(--ok) 8%,transparent)}
+.newkey .key{font-size:18px;margin:6px 0 10px}
+.uid{direction:ltr;font-family:Consolas,monospace;background:var(--bg);padding:8px 10px;border-radius:8px;word-break:break-all;margin:8px 0}
+.hide{display:none!important}
+</style>
+</head>
+<body>
+
+<!-- ============ LOGIN ============ -->
+<div id="vLogin" class="login hide">
+ <div class="card">
+  <h2 style="text-align:center;font-size:20px">لوحة تراخيص Mutabaa DMS</h2>
+  <input id="em" type="email" dir="ltr" placeholder="البريد الإلكتروني" autocomplete="username">
+  <input id="pw" type="password" dir="ltr" placeholder="كلمة المرور" autocomplete="current-password">
+  <button class="btn" id="go" style="width:100%">دخول</button>
+  <div class="msg" id="lm"></div>
+ </div>
+</div>
+
+<!-- ============ NOT OWNER ============ -->
+<div id="vDeny" class="login hide">
+ <div class="card">
+  <h2>هذا الحساب ليس مالك النظام</h2>
+  <p style="color:var(--mu);margin:0 0 6px">في Firebase Console ← Firestore ← أنشئ مجموعة <b>owners</b> ثم مستنداً رقمه (Document ID) هو:</p>
+  <div class="uid" id="uid"></div>
+  <p style="color:var(--mu);font-size:13px;margin:6px 0 14px">أضف حقلاً واحداً فقط مثل: name = "Ahmed" ثم حدّث الصفحة.</p>
+  <button class="btn s" id="out1">تسجيل الخروج</button>
+ </div>
+</div>
+
+<!-- ============ DASHBOARD ============ -->
+<div id="vApp" class="wrap hide">
+ <div class="top">
+  <div><h1>لوحة التراخيص</h1><small>Mutabaa DMS — <span id="who" dir="ltr"></span></small></div>
+  <button class="btn s" id="out2">تسجيل الخروج</button>
+ </div>
+
+ <div class="card">
+  <h2>إنشاء ترخيص جديد</h2>
+  <div class="grid">
+   <div><label>اسم الشركة / العميل</label><input id="nc" placeholder="مثال: شركة برايم للتوصيل" maxlength="80"></div>
+   <div><label>المدة</label>
+    <select id="np">
+     <option value="30">شهر واحد (30 يوماً)</option>
+     <option value="90">3 أشهر (90 يوماً)</option>
+     <option value="180">6 أشهر (180 يوماً)</option>
+     <option value="365" selected>سنة (365 يوماً)</option>
+     <option value="0">مدى الحياة</option>
+     <option value="-1">مدة مخصصة…</option>
+    </select></div>
+   <div id="ndw" class="hide"><label>عدد الأيام</label><input id="nd" type="number" min="1" max="3650" value="45"></div>
+   <div><label>ملاحظة (تظهر لك فقط)</label><input id="nn" placeholder="مثال: دفع 500,000 د.ع" maxlength="120"></div>
+  </div>
+  <label class="radio" style="margin-top:14px"><input type="checkbox" id="ns"> ابدأ احتساب المدة من الآن (وإلا تبدأ عند أول تفعيل من العميل)</label>
+  <button class="btn" id="mk" style="margin-top:6px">إنشاء المفتاح</button>
+  <div class="msg" id="cm"></div>
+  <div class="newkey" id="nk">
+   <div>مفتاح الترخيص الجديد:</div>
+   <div class="key" id="nkv"></div>
+   <div class="act"><button class="btn sm" id="nkc">نسخ المفتاح</button><button class="btn sm s" id="nkm">نسخ رسالة جاهزة للعميل</button></div>
+  </div>
+ </div>
+
+ <div class="card">
+  <h2>كل التراخيص <span id="cnt" style="color:var(--mu);font-weight:400;font-size:14px"></span></h2>
+  <div class="tools"><input id="q" placeholder="بحث بالاسم أو المفتاح…"><button class="btn s" id="rf">تحديث</button></div>
+  <div class="tw"><table>
+   <thead><tr><th>العميل</th><th>المفتاح</th><th>المدة</th><th>بدأ في</th><th>ينتهي</th><th>المتبقي</th><th>الحالة</th><th>إجراءات</th></tr></thead>
+   <tbody id="tb"></tbody>
+  </table></div>
+  <div class="msg" id="tm"></div>
+ </div>
+</div>
+
+<div id="mo" class="mo hide"><div class="mb" id="mbx"></div></div>
+
+<script type="module">
+import{initializeApp}from"https://www.gstatic.com/firebasejs/13.1.0/firebase-app.js";
+import{getAuth,signInWithEmailAndPassword,onAuthStateChanged,signOut}from"https://www.gstatic.com/firebasejs/13.1.0/firebase-auth.js";
+import{getFirestore,collection,doc,getDoc,getDocs,setDoc,updateDoc,deleteDoc,serverTimestamp,deleteField}from"https://www.gstatic.com/firebasejs/13.1.0/firebase-firestore.js";
+
+const app=initializeApp({apiKey:"AIzaSyBys_sC2GqWQNqekbf6Tr6jx6MudZs3vLQ",authDomain:"mutabaa-dms.firebaseapp.com",projectId:"mutabaa-dms",storageBucket:"mutabaa-dms.firebasestorage.app",messagingSenderId:"317850299351",appId:"1:317850299351:web:9b9bacfc6442296790b992"});
+const auth=getAuth(app),db=getFirestore(app);
+const $=s=>document.querySelector(s),DAY=864e5;
+const show=id=>["vLogin","vDeny","vApp"].forEach(v=>$("#"+v).classList.toggle("hide",v!==id));
+const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const fmt=ms=>ms?new Date(ms).toLocaleDateString("en-GB"):"—";
+const say=(el,t,c)=>{el.textContent=t;el.className="msg"+(c?" "+c:"")};
+const PLAN={30:"شهر",90:"3 أشهر",180:"6 أشهر",365:"سنة",0:"مدى الحياة"};
+const planName=d=>d===0?"مدى الحياة":(PLAN[d]||d+" يوم");
+let ALL=[];
+
+/* ---------- key generator: MTB-XXXX-XXXX-XXXX ---------- */
+function newKey(){
+ const c="ABCDEFGHJKLMNPQRSTUVWXYZ23456789",b=crypto.getRandomValues(new Uint8Array(12));
+ const g=i=>[...b.slice(i,i+4)].map(x=>c[x%32]).join("");
+ return`MTB-${g(0)}-${g(4)}-${g(8)}`;
+}
+
+/* ---------- status ---------- */
+function calc(x){
+ const ms=v=>v&&v.toMillis?v.toMillis():0,act=ms(x.activatedAt),dd=Number(x.durationDays||0);
+ let exp=ms(x.expiresAt);if(!exp&&dd>0&&act)exp=act+dd*DAY;
+ let st="active";
+ if(x.status&&x.status!=="active")st=x.status;
+ else if(dd>0&&!act&&!x.expiresAt)st="pending";
+ else if(exp&&exp<Date.now())st="expired";
+ return{st,exp,act,dd};
+}
+const ST={active:"فعّال",pending:"بانتظار التفعيل",expired:"منتهي",suspended:"موقوف",revoked:"ملغي"};
+
+/* ---------- auth ---------- */
+onAuthStateChanged(auth,async u=>{
+ if(!u){show("vLogin");return}
+ try{
+  const o=await getDoc(doc(db,"owners",u.uid));
+  if(!o.exists()){$("#uid").textContent=u.uid;show("vDeny");return}
+ }catch(e){$("#uid").textContent=u.uid;show("vDeny");return}
+ $("#who").textContent=u.email;show("vApp");load();
+});
+const login=async()=>{
+ const b=$("#go");b.disabled=true;say($("#lm"),"…");
+ try{await signInWithEmailAndPassword(auth,$("#em").value.trim(),$("#pw").value);say($("#lm"),"")}
+ catch(e){say($("#lm"),"البريد أو كلمة المرور غير صحيحة","e")}
+ b.disabled=false;
+};
+$("#go").onclick=login;$("#pw").onkeydown=e=>{if(e.key==="Enter")login()};
+$("#out1").onclick=$("#out2").onclick=()=>signOut(auth);
+
+/* ---------- list ---------- */
+async function load(){
+ say($("#tm"),"…");
+ try{
+  const s=await getDocs(collection(db,"licenses"));
+  ALL=s.docs.map(d=>({id:d.id,...d.data()})).sort((a,b)=>(b.createdAt?.toMillis?.()||0)-(a.createdAt?.toMillis?.()||0));
+  say($("#tm"),"");draw();
+ }catch(e){say($("#tm"),"تعذّر التحميل: "+(e.code||e.message)+" — تأكد من نشر قواعد Firestore ووجود مستند owners","e")}
+}
+function draw(){
+ const q=$("#q").value.trim().toLowerCase();
+ const rows=ALL.filter(x=>!q||(x.customer||"").toLowerCase().includes(q)||x.id.toLowerCase().includes(q));
+ $("#cnt").textContent=`(${ALL.length})`;
+ $("#tb").innerHTML=rows.length?rows.map(x=>{
+  const c=calc(x),left=c.exp?Math.ceil((c.exp-Date.now())/DAY):null;
+  const leftTxt=c.dd===0&&!x.expiresAt?"∞":(c.exp?(left>=0?left+" يوم":"منتهي منذ "+(-left)+" يوم"):"—");
+  const paused=x.status==="suspended";
+  return`<tr><td><b>${esc(x.customer)}</b>${x.note?`<div style="color:var(--mu);font-size:12.5px">${esc(x.note)}</div>`:""}</td>
+  <td><span class="key">${esc(x.id)}</span></td>
+  <td>${x.expiresAt?"تاريخ محدد":planName(c.dd)}</td><td>${fmt(c.act)}</td><td>${c.dd===0&&!x.expiresAt?"—":fmt(c.exp)}</td><td>${leftTxt}</td>
+  <td><span class="pill p-${c.st}">${ST[c.st]||esc(c.st)}</span></td>
+  <td><div class="act">
+   <button class="btn sm" data-a="renew" data-k="${esc(x.id)}">تجديد</button>
+   <button class="btn sm s" data-a="msg" data-k="${esc(x.id)}">نسخ رسالة</button>
+   <button class="btn sm s" data-a="${paused?"resume":"pause"}" data-k="${esc(x.id)}">${paused?"استئناف":"إيقاف"}</button>
+   ${x.status==="revoked"?"":`<button class="btn sm dg" data-a="revoke" data-k="${esc(x.id)}">إلغاء</button>`}
+   <button class="btn sm dg" data-a="del" data-k="${esc(x.id)}">حذف</button>
+  </div></td></tr>`}).join(""):`<tr><td colspan="8" class="empty">لا توجد تراخيص</td></tr>`;
+}
+$("#q").oninput=draw;$("#rf").onclick=load;
+
+/* ---------- create ---------- */
+$("#np").onchange=()=>$("#ndw").classList.toggle("hide",$("#np").value!=="-1");
+const msgFor=(k,dd)=>`مفتاح ترخيص Mutabaa DMS:\n${k}\n\nالمدة: ${planName(dd)}\nللتفعيل: افتح البرنامج ← الإعدادات ← الترخيص ← إدخال مفتاح الترخيص ← تفعيل.`;
+const copy=async(t,el)=>{try{await navigator.clipboard.writeText(t);const o=el.textContent;el.textContent="تم النسخ ✓";setTimeout(()=>el.textContent=o,1400)}catch(e){prompt("انسخ النص:",t)}};
+$("#mk").onclick=async()=>{
+ const cm=$("#cm"),cust=$("#nc").value.trim();
+ if(!cust)return say(cm,"اكتب اسم الشركة","e");
+ let dd=Number($("#np").value);if(dd===-1)dd=Math.round(Number($("#nd").value));
+ if(!(dd>=0&&dd<=3650))return say(cm,"عدد الأيام غير صحيح","e");
+ let key;do{key=newKey()}while(ALL.some(x=>x.id===key));
+ const data={customer:cust,status:"active",durationDays:dd,note:$("#nn").value.trim(),createdAt:serverTimestamp()};
+ if($("#ns").checked&&dd>0)data.activatedAt=serverTimestamp();
+ $("#mk").disabled=true;say(cm,"…");
+ try{
+  await setDoc(doc(db,"licenses",key),data);
+  say(cm,"تم إنشاء الترخيص","k");
+  $("#nk").style.display="block";$("#nkv").textContent=key;
+  $("#nkc").onclick=e=>copy(key,e.target);$("#nkm").onclick=e=>copy(msgFor(key,dd),e.target);
+  $("#nc").value="";$("#nn").value="";load();
+ }catch(e){say(cm,"فشل الإنشاء: "+(e.code||e.message),"e")}
+ $("#mk").disabled=false;
+};
+
+/* ---------- row actions ---------- */
+const modal=h=>{$("#mbx").innerHTML=h;$("#mo").classList.remove("hide")};
+const closeM=()=>$("#mo").classList.add("hide");
+$("#mo").onmousedown=e=>{if(e.target.id==="mo")closeM()};
+$("#tb").onclick=async e=>{
+ const b=e.target.closest("button");if(!b)return;
+ const k=b.dataset.k,x=ALL.find(z=>z.id===k);if(!x)return;
+ const ref=doc(db,"licenses",k),a=b.dataset.a;
+ try{
+  if(a==="msg")return copy(msgFor(k,calc(x).dd),b);
+  if(a==="pause"){await updateDoc(ref,{status:"suspended"});return load()}
+  if(a==="resume"){await updateDoc(ref,{status:"active"});return load()}
+  if(a==="revoke"){if(confirm(`إلغاء ترخيص "${x.customer}" نهائياً؟`)){await updateDoc(ref,{status:"revoked"});load()}return}
+  if(a==="del"){if(confirm(`حذف ترخيص "${x.customer}" بالكامل؟ لا يمكن التراجع.`)){await deleteDoc(ref);load()}return}
+  if(a==="renew")return renew(x);
+ }catch(err){say($("#tm"),"فشلت العملية: "+(err.code||err.message),"e")}
+};
+function renew(x){
+ const c=calc(x),expired=c.st==="expired"||c.st==="revoked"||c.st==="suspended";
+ modal(`<h3>تجديد: ${esc(x.customer)}</h3>
+ <label>مدة التجديد</label>
+ <select id="rp"><option value="30">شهر (30 يوماً)</option><option value="90">3 أشهر</option><option value="180">6 أشهر</option><option value="365" selected>سنة</option><option value="0">مدى الحياة</option><option value="-1">مخصص…</option></select>
+ <div id="rdw" class="hide" style="margin-top:10px"><label>عدد الأيام</label><input id="rd" type="number" min="1" max="3650" value="45"></div>
+ <label class="radio" style="margin-top:14px"><input type="radio" name="rm" value="add" ${expired?"":"checked"}> إضافة إلى المدة الحالية</label>
+ <label class="radio"><input type="radio" name="rm" value="now" ${expired?"checked":""}> البدء من اليوم</label>
+ <div class="msg" id="rmg"></div>
+ <div class="row"><button class="btn s" id="rc">إلغاء</button><button class="btn ok" id="rg">تجديد</button></div>`);
+ $("#rp").onchange=()=>$("#rdw").classList.toggle("hide",$("#rp").value!=="-1");
+ $("#rc").onclick=closeM;
+ $("#rg").onclick=async()=>{
+  let days=Number($("#rp").value);if(days===-1)days=Math.round(Number($("#rd").value));
+  if(!(days>=0&&days<=3650))return say($("#rmg"),"عدد الأيام غير صحيح","e");
+  const mode=document.querySelector('input[name=rm]:checked').value,ref=doc(db,"licenses",x.id);
+  $("#rg").disabled=true;
+  try{
+   if(days===0){await updateDoc(ref,{status:"active",durationDays:0,expiresAt:deleteField()})}
+   else if(mode==="now"||(c.dd===0&&!x.expiresAt)){await updateDoc(ref,{status:"active",durationDays:days,activatedAt:serverTimestamp(),expiresAt:deleteField()})}
+   else if(x.expiresAt){const base=Math.max(x.expiresAt.toMillis(),Date.now());await updateDoc(ref,{status:"active",expiresAt:new Date(base+days*DAY)})}
+   else{await updateDoc(ref,{status:"active",durationDays:(c.dd||0)+days})}
+   closeM();load();
+  }catch(err){say($("#rmg"),"فشل التجديد: "+(err.code||err.message),"e");$("#rg").disabled=false}
+ };
+}
+</script>
+</body>
+</html>
